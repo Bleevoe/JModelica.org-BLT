@@ -104,6 +104,10 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     problem = Implicit_Problem(dae_residual, y0, yd0, start_time)
     simulator = IDA(problem)
     simulator.rtol = 1e-10
+
+    # TODO: This is where to suppress algebraic error control, but need to manually specify the algebraics!
+    #~ simulator.suppress_alg = True
+
     (t, y, yd) = simulator.simulate(final_time, ncp)
 
     # Generate result for time and inputs
