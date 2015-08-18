@@ -1,0 +1,27 @@
+model Simple
+    Real x(start=1, fixed=true);
+    Real y;
+    Real z;
+equation
+	y = z;
+	y = 2*x;
+	der(x) = -y -z + x;
+end Simple;
+
+model Simple_2
+    Real x(start=1, fixed=true);
+    Real y;
+    Real z;
+    Real a;
+    input Real u;
+    parameter Real p = 2;
+equation
+    der(x) = x - p*y + u;
+    y + z     = x;
+        z + a = x;
+    y - z + a = x;
+end Simple_2;
+
+optimization Simple_Opt(objectiveIntegrand=x^2, finalTime=10)
+    extends Simple;
+end Simple_Opt;

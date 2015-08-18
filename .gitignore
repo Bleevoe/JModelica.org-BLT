@@ -1,0 +1,8 @@
+*_diagnostics
+*.fmu
+*_log.txt
+*_result.txt
+*.pyc
+*.jmu
+*.fmux
+*.log
