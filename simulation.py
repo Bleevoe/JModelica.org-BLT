@@ -8,7 +8,9 @@ import symbolic_processing as sp
 import itertools
 import time as timing
 
-def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []), ncp=500, blt=True, causalization_options=sp.CausalizationOptions(), expand_to_sx=True):
+def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []), ncp=500, blt=True,
+             causalization_options=sp.CausalizationOptions(), expand_to_sx=True, suppress_alg=False,
+             rtol=1e-8, atol=1e-6):
     """
     Simulate model from CasADi Interface using CasADi.
 
@@ -100,14 +102,18 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
         dae_res.evaluate()
         return dae_res.getOutput(0).toArray().reshape(-1)
 
-    # Simulate
+    # Set up simulator
     problem = Implicit_Problem(dae_residual, y0, yd0, start_time)
     simulator = IDA(problem)
-    simulator.rtol = 1e-10
+    simulator.rtol = rtol
+    simulator.atol = atol * np.ones([n_y, 1])
 
-    # TODO: This is where to suppress algebraic error control, but need to manually specify the algebraics!
-    #~ simulator.suppress_alg = True
+    # Suppress algebraic variables
+    if suppress_alg:
+        simulator.algvar = n_x * [True] + (n_y - n_x) * [False]
+        simulator.suppress_alg = True
 
+    # Simulate
     (t, y, yd) = simulator.simulate(final_time, ncp)
 
     # Generate result for time and inputs

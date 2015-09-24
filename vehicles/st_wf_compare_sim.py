@@ -79,8 +79,11 @@ names = [var.getName() for var in variables if not var.isAlias()] # Remove alias
 init_cond = dict([(name, init_fmu.get(name)[0]) for name in names])
 
 # Simulate and plot
-res_blt = simulate(model, init_cond, start_time, final_time, input, ncp, True, caus_opts, expand_to_sx)
+res_ref = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx,
+				   rtol=1e-12, atol=1e-8)
 res_dae = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx)
+res_sup = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx, True)
+res_blt = simulate(model, init_cond, start_time, final_time, input, ncp, True, caus_opts, expand_to_sx)
 
 [model.DIFFERENTIATED, model.DERIVATIVE, model.REAL_ALGEBRAIC]
 
@@ -97,26 +100,47 @@ for vk in var_kinds:
         print('Algebraics:')
     else:
         raise NotImplementedError
-    max_rdiff = 0.
-    max_rdiff_name = 'ERROR'
+    max_rdiff_dae = 0.
+    max_rdiff_dae_name = 'ERROR'
+    max_rdiff_sup = 0.
+    max_rdiff_sup_name = 'ERROR'
+    max_rdiff_blt = 0.
+    max_rdiff_blt_name = 'ERROR'
     for var in [v for v in model.getVariables(vk) if not v.isAlias()]:
         name = var.getName()
-        rdiff = rms(np.abs((res_blt[name] - res_dae[name]) / (res_blt[name] + eps)))
-        print('%s: %.3e' % (name, rdiff))
-        if rdiff > max_rdiff:
-            max_rdiff = rdiff
-            max_rdiff_name = name
-    print('Maximum:  %s: %.3e' % (max_rdiff_name, max_rdiff))
+        rdiff_dae = rms(np.abs((res_dae[name] - res_ref[name]) / (res_ref[name] + eps)))
+        rdiff_sup = rms(np.abs((res_sup[name] - res_ref[name]) / (res_ref[name] + eps)))
+        rdiff_blt = rms(np.abs((res_blt[name] - res_ref[name]) / (res_ref[name] + eps)))
+        print('DAE %s: %.3e' % (name, rdiff_dae))
+        print('Sup %s: %.3e' % (name, rdiff_sup))
+        print('BLT %s: %.3e' % (name, rdiff_blt))
+        if rdiff_dae > max_rdiff_dae:
+            max_rdiff_dae = rdiff_dae
+            max_rdiff_dae_name = name
+        if rdiff_sup > max_rdiff_sup:
+            max_rdiff_sup = rdiff_sup
+            max_rdiff_sup_name = name
+        if rdiff_blt > max_rdiff_blt:
+            max_rdiff_blt = rdiff_blt
+            max_rdiff_blt_name = name
+    print('Maximum DAE:  %s: %.3e' % (max_rdiff_dae_name, max_rdiff_dae))
+    print('Maximum Sup:  %s: %.3e' % (max_rdiff_sup_name, max_rdiff_sup))
+    print('Maximum BLT:  %s: %.3e' % (max_rdiff_blt_name, max_rdiff_blt))
 
+time_ref = res_ref['time']
 time_dae = res_dae['time']
+time_sup = res_sup['time']
 time_blt = res_blt['time']
-plot_names = ['Fyr0', 'der(alphaf)']
+plot_names = ['Fyr0', 'der(alphaf)', 'alphar', 'kappaf']
 rad2deg = 180. / (2*np.pi)
 if with_plots:
     for (i, name) in enumerate(plot_names):
         plt.close(i)
         plt.figure(i)
+        plt.plot(time_ref, res_ref[name])
         plt.plot(time_dae, res_dae[name])
+        plt.plot(time_sup, res_sup[name])
         plt.plot(time_blt, res_blt[name])
         plt.title(name)
+        plt.legend(['Ref', 'DAE', 'BLT', 'Sup'])
 plt.show()

@@ -16,10 +16,12 @@ if __name__ == "__main__":
     source = ["Modelica", "strings"][0]
     
     blt = True
-    blt = False
+    #~ blt = False
     with_plots = True
     #~ with_plots = False
     expand_to_sx = True
+    suppress_alg = True
+    suppress_alg = False
     #~ expand_to_sx = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
@@ -43,7 +45,8 @@ if __name__ == "__main__":
         else:
             class_name = "Simple"
             file_paths = "simple.mop"
-            opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True}
+            opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': False, 'index_reduction': False,
+					'equation_sorting': False, 'automatic_add_initial_equations': False}
             model = transfer_model(class_name, file_paths, compiler_options=opts)
             init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
     if problem == "circuit":
@@ -190,9 +193,10 @@ if __name__ == "__main__":
             init_cond = {'der(x)': -1, 'x': 1, 'y': -2}
         else:
             raise NotImplementedError
+    #~ init_cond = {'der(x)': 1, 'x': 0, 'y': 1}
 
     # Simulate and plot
-    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx)
+    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg)
     if problem == "circuit":
         t = res['time']
         iL = res['iL']

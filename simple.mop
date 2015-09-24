@@ -1,11 +1,9 @@
 model Simple
-    Real x(start=1, fixed=true);
+    Real x;
     Real y;
-    Real z;
 equation
-	y = z;
-	y = 2*x;
-	der(x) = -y -z + x;
+    der(x) = x + y;
+    x = time;
 end Simple;
 
 model Simple_2
@@ -25,3 +23,6 @@ end Simple_2;
 optimization Simple_Opt(objectiveIntegrand=x^2, finalTime=10)
     extends Simple;
 end Simple_Opt;
+
+
+
