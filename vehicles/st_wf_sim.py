@@ -15,10 +15,16 @@ from simulation import *
 # Define problem
 plt.rcParams.update({'text.usetex': False})
 
+rtol = 1e-9
+atol = 1e-7
 blt = True
 blt = False
 with_plots = True
 with_plots = False
+suppress_alg = True
+suppress_alg = False
+solver = "IDA"
+#~ solver = "Radau5DAE"
 expand_to_sx = True
 #~ expand_to_sx = False
 caus_opts = sp.CausalizationOptions()
@@ -80,35 +86,48 @@ names = [var.getName() for var in variables if not var.isAlias()] # Remove alias
 init_cond = dict([(name, init_fmu.get(name)[0]) for name in names])
 
 # Simulate and plot
-res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx)
-time = res['time']
-X = res['X']
-Y = res['Y']
-delta = res['delta']
-Twf = res['Twf']
-Twr = res['Twr']
-rad2deg = 180. / (2*np.pi)
-if with_plots:
-	# Plot road
-	plt.close(1)
-	plt.figure(1)
-	plt.plot(X, Y, 'b')
-	xi = np.linspace(0., Ri, 100)
-	xo = np.linspace(0., Ro, 100)
-	yi = (Ri**8 - xi**8) ** (1./8.)
-	yo = (Ro**8 - xo**8) ** (1./8.)
-	plt.plot(xi, yi, 'r--')
-	plt.plot(xo, yo, 'r--')
-	plt.xlabel('X [m]')
-	plt.ylabel('Y [m]')
-	plt.legend(['position', 'road'], loc=3)
+res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, solver=solver, rtol=rtol, atol=atol)
+    
+#~ # Simulate and plot
+#~ steps = {}
+#~ time = {}
+#~ for i in xrange(23):
+    #~ suppress_alg = 23 * [False]
+    #~ suppress_alg[i] = True
+    #~ res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg)
+    #~ steps[i] = res.stats['steps']
+    #~ time[i] = res.stats['time']
+#~ for (key, val) in steps.iteritems():
+    #~ print('y_%d:\tSteps: %d\tTime: %.1f' % (key, val, time[key]))
+    
+#~ time = res['time']
+#~ X = res['X']
+#~ Y = res['Y']
+#~ delta = res['delta']
+#~ Twf = res['Twf']
+#~ Twr = res['Twr']
+#~ rad2deg = 180. / (2*np.pi)
+#~ if with_plots:
+	#~ # Plot road
+	#~ plt.close(1)
+	#~ plt.figure(1)
+	#~ plt.plot(X, Y, 'b')
+	#~ xi = np.linspace(0., Ri, 100)
+	#~ xo = np.linspace(0., Ro, 100)
+	#~ yi = (Ri**8 - xi**8) ** (1./8.)
+	#~ yo = (Ro**8 - xo**8) ** (1./8.)
+	#~ plt.plot(xi, yi, 'r--')
+	#~ plt.plot(xo, yo, 'r--')
+	#~ plt.xlabel('X [m]')
+	#~ plt.ylabel('Y [m]')
+	#~ plt.legend(['position', 'road'], loc=3)
 
-	# Plot inputs
-	plt.close(2)
-	plt.figure(2)
-	plt.plot(time, delta * rad2deg, drawstyle='steps-post')
-	plt.plot(time, Twf * 1e-3, drawstyle='steps-post')
-	plt.plot(time, Twr * 1e-3, drawstyle='steps-post')
-	plt.xlabel('time [s]')
-	plt.legend(['delta [deg]', 'Twf [kN]', 'Twr [kN]'], loc=4)
-	plt.show()
+	#~ # Plot inputs
+	#~ plt.close(2)
+	#~ plt.figure(2)
+	#~ plt.plot(time, delta * rad2deg, drawstyle='steps-post')
+	#~ plt.plot(time, Twf * 1e-3, drawstyle='steps-post')
+	#~ plt.plot(time, Twr * 1e-3, drawstyle='steps-post')
+	#~ plt.xlabel('time [s]')
+	#~ plt.legend(['delta [deg]', 'Twf [kN]', 'Twr [kN]'], loc=4)
+	#~ plt.show()

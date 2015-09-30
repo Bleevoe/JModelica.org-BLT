@@ -21,7 +21,7 @@ blt = True
 #~ blt = False
 caus_opts = sp.CausalizationOptions()
 #~ caus_opts['plots'] = True
-caus_opts['draw_blt'] = True
+#~ caus_opts['draw_blt'] = True
 #~ caus_opts['solve_blocks'] = True
 #~ caus_opts['ad_hoc_scale'] = True
 #~ caus_opts['inline'] = False
@@ -39,7 +39,9 @@ op = transfer_optimization_problem(class_name, file_paths, compiler_options=comp
 opt_opts = op.optimize_options()
 opt_opts['IPOPT_options']['linear_solver'] = "ma27"
 opt_opts['IPOPT_options']['tol'] = 1e-9
-opt_opts['n_e'] = 60
+opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
+opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = -1
+opt_opts['n_e'] = 15
 
 # Set blocking factors
 factors = {'delta_u': opt_opts['n_e'] / 2 * [2],
@@ -48,7 +50,7 @@ factors = {'delta_u': opt_opts['n_e'] / 2 * [2],
 rad2deg = 180. / (2*np.pi)
 du_bounds = {'delta_u': 2. / rad2deg}
 bf = BlockingFactors(factors, du_bounds=du_bounds)
-opt_opts['blocking_factors'] = bf
+#~ opt_opts['blocking_factors'] = bf
 
 # Use Dymola simulation result as initial guess
 opt_opts['init_traj'] = sim_res

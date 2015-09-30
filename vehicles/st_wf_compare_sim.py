@@ -31,7 +31,7 @@ caus_opts = sp.CausalizationOptions()
 sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
 start_time = 0.
 final_time = sim_res.get_variable_data('time').t[-1]
-ncp = 500
+ncp = 100
 class_name = "Car"
 file_paths = os.path.join(get_files_path(), "vehicle_turn.mop")
 opts = {'generate_html_diagnostics': True}
@@ -46,13 +46,13 @@ init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
 
 input_matrix = sim_res.get_variable_data("time").x.reshape([-1, 1])
 for input_var in model.getVariables(model.REAL_INPUT):
-	input_data = sim_res.get_variable_data(input_var.getName()).x.reshape([-1, 1])
-	if len(input_data) <= 2:
-		input_data = np.array(input_matrix.shape[0] * [input_data[-1]]).reshape([-1, 1])
-	input_matrix = np.hstack([input_matrix, input_data])
+    input_data = sim_res.get_variable_data(input_var.getName()).x.reshape([-1, 1])
+    if len(input_data) <= 2:
+        input_data = np.array(input_matrix.shape[0] * [input_data[-1]]).reshape([-1, 1])
+    input_matrix = np.hstack([input_matrix, input_data])
 input_traj = TrajectoryLinearInterpolation(input_matrix[:, 0], input_matrix[:, 1:])
 def input(time):
-	return input_traj.eval(time).T
+    return input_traj.eval(time).T
 
 # Set some initial states
 Ri = 35.
@@ -80,7 +80,7 @@ init_cond = dict([(name, init_fmu.get(name)[0]) for name in names])
 
 # Simulate and plot
 res_ref = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx,
-				   rtol=1e-12, atol=1e-8)
+                   rtol=1e-12, atol=1e-8)
 res_dae = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx)
 res_sup = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx, True)
 res_blt = simulate(model, init_cond, start_time, final_time, input, ncp, True, caus_opts, expand_to_sx)
@@ -143,4 +143,86 @@ if with_plots:
         plt.plot(time_blt, res_blt[name])
         plt.title(name)
         plt.legend(['Ref', 'DAE', 'BLT', 'Sup'])
+plt.show()
+
+plt.close(100)
+plt.figure(100)
+plt.close(101)
+plt.figure(101)
+for vk in var_kinds:
+    if vk == model.DIFFERENTIATED:
+        row = 0
+        marker = 'x'
+    elif vk == model.DERIVATIVE:
+        row = 1
+        marker = 'o'
+    elif vk == model.REAL_ALGEBRAIC:
+        row = 2
+        marker = 'd'
+    else:
+        raise NotImplementedError
+    max_dae_traj = []
+    max_sup_traj = []
+    max_blt_traj = []
+    for i in xrange(len(time_ref)):
+        max_rdiff_dae = eps
+        max_rdiff_sup = eps
+        max_rdiff_blt = eps
+        for var in [v for v in model.getVariables(vk) if not v.isAlias()]:
+            name = var.getName()
+            rdiff_dae = np.abs((res_dae[name][i] - res_ref[name][i]) / (res_ref[name][i] + eps))
+            rdiff_sup = np.abs((res_sup[name][i] - res_ref[name][i]) / (res_ref[name][i] + eps))
+            rdiff_blt = np.abs((res_blt[name][i] - res_ref[name][i]) / (res_ref[name][i] + eps))
+            if rdiff_dae > max_rdiff_dae:
+                max_rdiff_dae = rdiff_dae
+            if rdiff_sup > max_rdiff_sup:
+                max_rdiff_sup = rdiff_sup
+            if rdiff_blt > max_rdiff_blt:
+                max_rdiff_blt = rdiff_blt
+        max_dae_traj.append(max_rdiff_dae)
+        max_sup_traj.append(max_rdiff_sup)
+        max_blt_traj.append(max_rdiff_blt)
+    plt.figure(100)
+    plt.subplot(3, 3, row*3 + 1)
+    plt.semilogy(time_ref[1:], max_dae_traj[1:])
+    plt.grid('on')
+    plt.subplot(3, 3, row*3 + 2)
+    plt.semilogy(time_ref[1:], max_sup_traj[1:])
+    plt.grid('on')
+    plt.subplot(3, 3, row*3 + 3)
+    plt.semilogy(time_ref[1:], max_blt_traj[1:])
+    plt.grid('on')
+    plt.figure(101)
+    plt.subplot(3, 1, row + 1)
+    plt.semilogy(time_ref[1:], max_dae_traj[1:], 'k')
+    plt.grid('on')
+    plt.subplot(3, 1, row + 1)
+    plt.semilogy(time_ref[1:], max_sup_traj[1:], 'r')
+    plt.grid('on')
+    plt.subplot(3, 1, row + 1)
+    plt.semilogy(time_ref[1:], max_blt_traj[1:], 'b')
+    plt.grid('on')
+plt.figure(100)
+plt.subplot(3, 3, 1)
+plt.ylabel('$x$')
+plt.subplot(3, 3, 4)
+plt.ylabel('$\dot x$')
+plt.subplot(3, 3, 7)
+plt.ylabel('$y$')
+plt.subplot(3, 3, 1)
+plt.title('DAE')
+plt.subplot(3, 3, 2)
+plt.title('DAE sup. alg.')
+plt.subplot(3, 3, 3)
+plt.title('ODE')
+
+plt.figure(101)
+plt.subplot(3, 1, 1)
+plt.title('$x$')
+plt.legend(['DAE', 'DAE sup.', 'ODE'])
+plt.subplot(3, 1, 2)
+plt.title('$\dot x$')
+plt.subplot(3, 1, 3)
+plt.title('$y$')
+
 plt.show()
