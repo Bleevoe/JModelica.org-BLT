@@ -6,3 +6,11 @@
 *.jmu
 *.fmux
 *.log
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+*.vrb

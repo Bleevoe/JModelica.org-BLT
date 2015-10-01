@@ -1,0 +1,4 @@
+optimization DoublePendulum
+    extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum;
+end DoublePendulum;
+

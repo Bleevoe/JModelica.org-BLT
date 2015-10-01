@@ -1375,7 +1375,7 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
         for (i, sol_alg) in self._explicit_solved_algebraics:
             res[sol_alg.name] = []
             explicit_solved_expr.append(self._solved_expr[i])
-        alg_sol_f = casadi.MXFunction(self._known_vars, explicit_solved_expr)
+        alg_sol_f = casadi.MXFunction(self._known_vars + model._explicit_unsolved_vars, explicit_solved_expr)
         alg_sol_f.init()
         if op_res.solver.expand_to_sx != "no":
             alg_sol_f = casadi.SXFunction(alg_sol_f)
@@ -1383,8 +1383,8 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
 
         # Compute solved algebraics
         for k in xrange(len(res['time'])):
-            for (i, known_var) in enumerate(self._known_vars):
-                alg_sol_f.setInput(res[known_var.getName()][k], i)
+            for (i, var) in enumerate(self._known_vars + model._explicit_unsolved_vars):
+                alg_sol_f.setInput(res[var.getName()][k], i)
             alg_sol_f.evaluate()
             for (i, sol_alg) in enumerate(self._explicit_solved_algebraics):
                 res[sol_alg[1].name].append(alg_sol_f.getOutput(i).toArray().reshape(-1))

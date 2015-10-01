@@ -1,0 +1,128 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[pdfpagelabels]{hyperref}
+\hypersetup{colorlinks = true, linkcolor = black, citecolor = black, urlcolor = blue}
+
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage{parskip}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{float}
+\usepackage[linesnumbered]{algorithm2e}
+\widowpenalty=5000
+\clubpenalty=5000
+
+\allowdisplaybreaks
+
+\newcommand*\xbar[1]{%
+  \hbox{%
+    \vbox{%
+      \hrule height 0.5pt % The actual bar
+      \kern0.5ex%         % Distance between bar and symbol
+      \hbox{%
+        \kern-0.1em%      % Shortening on the left side
+        \ensuremath{#1}%
+        \kern-0.1em%      % Shortening on the right side
+      }%
+    }%
+  }%
+}
+
+\usepackage{geometry}            %% please don't change geometry settings!
+%\geometry{left=20mm, right=20mm, top=25mm, bottom=25mm, noheadfoot}
+\geometry{left=30mm, right=30mm}
+
+
+\begin{document}
+
+\begin{equation} 
+\label{eq:cdc_ST}
+\begin{aligned}
+\dot{v}^X - v^Y \dot{\psi}  &= \frac{1}{m} ( F^x_{f}\cos(\delta) +
+F^x_{r} -F^y_{f}\sin(\delta) ),  \\
+\dot{v}^Y + v^X \dot{\psi}  &= \frac{1}{m} ( F^y_{f}\cos(\delta) +
+F^y_{r} +F^x_{f}\sin(\delta) ), \\
+I_{ZZ} \ddot{\psi}  &= l_f F^y_{f}\cos(\delta) - l_r F^y_{r} + l_fF^x_{f}\sin(\delta),
+\end{aligned}
+\end{equation}
+where $m$ is the vehicle mass, $I_{ZZ}$ is the vehicle inertia
+about the $Z$-axis,
+$\dot{\psi}$ is the yaw rate, $\delta$ is the steer angle,
+$[v^X,v^Y]$ are the longitudinal and lateral velocities at the
+center of gravity, $[l_{f}$, $l_{r}]$ are the distances from the mass center
+to the front and rear wheel base, and $[F^{x}, F^{y}]$ are the longitudinal and
+lateral tire forces acting at the front and rear wheels.
+
+
+Fig.~\ref{fig:dt} provides a schematic of the double-track model that is used in the low-level formulation. It has five degrees of freedom: two translational ($v^X$ and $v^Y$) and three rotational (the roll-pitch-yaw angles $(\phi,\theta,\psi)$). The suspension  model is a rotational spring-damper system, and longitudinal and lateral load transfer is included. The derivation and details of both models are found in \cite{berntorp2014phd,berntorp_model}.
+
+The nominal tire forces $F^x_{0}$ and $F^y_{0}$ for the longitudinal and lateral directions under pure slip conditions are computed with the Magic formula \cite{Pacejka2006}, given by
+\begin{equation}
+	\label{eq:Fx}
+	\begin{aligned}
+		F^x_{0} &= \mu_x F^z 
+		\sin\Big( C_{x} 
+		\arctan\big(B_{x} \lambda_i \\
+		& \quad -E_{x}(B_{x}\lambda-\arctan B_{x}\lambda)\big)\Big),
+		\\ 
+		F^y_{0} &= \mu_y F^z \sin\Big( C_{y} \arctan\big(B_{y} \alpha \\
+		& \quad  -E_{y}(B_{y}\alpha-\arctan B_{y}\alpha)\big)\Big),
+	\end{aligned}
+\end{equation}
+with  lateral slip $\alpha_i$ and  longitudinal slip
+$\lambda_i$ 
+defined as
+\begin{subequations}
+	\begin{align}
+		\dot{\alpha}_i \frac{\sigma}{v^x_{i}} + \alpha_i &:= -\arctan \left( \frac{v^y_{i}}{v^x_{i}} \right), \label{eq:alpha}\\
+		%\lambda_f &= \frac{R_e \omega_f - v_{x,f}}{v_{x,f}}, \label{eq:lambdaf} \\
+		%\lambda_r &= \frac{R_e \omega_r - v_{x,r}}{v_{x,r}}, \label{eq:lambdar} \\
+		%v_{x,f} &= v_x \cos(\delta) + (v_y + l_f \dot{\psi}) \sin(\delta), \\
+		%v_{x,r} &= v_x,\label{eq:vw}
+		\lambda_i &:= \frac{R_w \omega_i - v^x_{i}}{v^x_{i}},\label{eq:lambda} 
+	\end{align}\label{eq:slip}%
+\end{subequations}
+where $\sigma$ is the relaxation length, $R_w$ is the wheel radius,
+$\omega_{i}$ is the wheel angular velocity for wheel ${i\in \{f,r\}\ \text{or} \ \{1,2,3,4\}}$, and
+$[v^y_{i},v^x_{i}]$ are the lateral and longitudinal wheel
+velocities for wheel $i$. In the following we suppress the index $i$ for brevity. 
+In
+\eqref{eq:Fx}, $\mu_x$ and $\mu_y$ are friction
+coefficients and $B$, $C$, and $E$ are parameters.
+ The nominal 
+normal force acting on each wheel axle is given by
+\begin{equation*} %\label{eq:Fz0}
+F^z_{0,f} =  mg\frac{l_r}{l}, \quad F^z_{0,r} =  mg\frac{l_f}{l}, 
+\end{equation*}
+where $g$ is the gravitational acceleration and $l = l_f + l_r$. In the single-track model $F^z = F^z_0 $ in \eqref{eq:Fx}. This is not true for the double-track model, because of load transfer.
+
+An experimentally verified approach to tire modeling under combined slip constraints is to scale the
+nominal forces \eqref{eq:Fx} with a weighting
+function $G$ for each direction, which depends on $\alpha$ and $\lambda$ \cite{Pacejka2006}. The relations are
+\begin{equation}
+\label{eq:cdc_WFX}
+\begin{aligned}
+F^{x,y} &= F^{x,y}_{0} G_{m},  \\
+G_{m} &= \cos( C_{m} \arctan(H_{m} m) ) , \\
+H_{m} &= B_{m 1} \cos(\arctan(B_{m 2} m)),
+\end{aligned}
+\end{equation}
+where $m$ is either  $\alpha$ or $\lambda$.
+Moreover, since it is the torques that can be controlled in a physical setup, we introduce a model for the wheel dynamics, namely
+\begin{equation*}
+\tau = I_w \dot{\omega}-R_wF^x, %\quad \label{eq:gvmwd}
+\end{equation*}
+where $I_w$ is the wheel  inertia and $\tau$ is the input torque.
+To account for that  commanded steer angle and brake/drive torques are not achieved instantenously, we incorporate first-order models from reference to achieved value according to
+\begin{equation}
+T\dot \delta = -\delta+ \delta_\mathrm{ref},\label{eq:cdc_inpmodel}
+\end{equation} 
+and similarly for the torques, where $T$ in \eqref{eq:cdc_inpmodel} is the time constant of the  control loop. The parameter values used here correspond to a medium-sized passenger car on dry asphalt.
+
+\end{document}

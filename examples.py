@@ -12,21 +12,21 @@ from pyjmi.common.core import TrajectoryLinearInterpolation
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "ccpp", "dist4", "double_pendulum"][2]
+    problem = ["simple", "circuit", "vehicle", "ccpp", "dist4", "double_pendulum"][3]
     source = ["Modelica", "strings"][0]
     
     blt = True
-    #~ blt = False
+    blt = False
     with_plots = True
-    #~ with_plots = False
+    with_plots = False
     expand_to_sx = True
     suppress_alg = True
-    suppress_alg = False
+    #~ suppress_alg = False
     #~ expand_to_sx = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
-    caus_opts['draw_blt'] = True
-    #~ caus_opts['solve_blocks'] = True
+    #~ caus_opts['draw_blt'] = True
+    caus_opts['solve_blocks'] = True
     #~ caus_opts['inline'] = False
     #~ caus_opts['closed_form'] = True
     #~ caus_opts['inline_solved'] = True
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     #~ init_cond = {'der(x)': 1, 'x': 0, 'y': 1}
 
     # Simulate and plot
-    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg)
+    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, rtol=1e-8, atol=1e-6)
     if problem == "circuit":
         t = res['time']
         iL = res['iL']

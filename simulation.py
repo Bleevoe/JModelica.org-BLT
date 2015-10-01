@@ -2,6 +2,7 @@ from IPython.core.debugger import Tracer; dh = Tracer()
 from casadi import *
 from assimulo.problem import Explicit_Problem, Implicit_Problem
 from assimulo.solvers.sundials import CVode, IDA
+from assimulo.solvers import Radau5DAE
 from scipy.optimize import fsolve
 import numpy as np
 import symbolic_processing as sp
@@ -10,7 +11,7 @@ import time as timing
 
 def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []), ncp=500, blt=True,
              causalization_options=sp.CausalizationOptions(), expand_to_sx=True, suppress_alg=False,
-             rtol=1e-8, atol=1e-6):
+             rtol=1e-8, atol=1e-6, solver="IDA"):
     """
     Simulate model from CasADi Interface using CasADi.
 
@@ -104,20 +105,34 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
 
     # Set up simulator
     problem = Implicit_Problem(dae_residual, y0, yd0, start_time)
-    simulator = IDA(problem)
+    if solver == "IDA":
+        simulator = IDA(problem)
+    elif solver == "Radau5DAE":
+        simulator = Radau5DAE(problem)
+    else:
+        raise ValueError("Unknown solver %s" % solver)
     simulator.rtol = rtol
     simulator.atol = atol * np.ones([n_y, 1])
 
     # Suppress algebraic variables
     if suppress_alg:
-        simulator.algvar = n_x * [True] + (n_y - n_x) * [False]
+        if isinstance(suppress_alg, bool):
+            simulator.algvar = n_x * [True] + (n_y - n_x) * [False]
+        else:
+            simulator.algvar = n_x * [True] + suppress_alg
         simulator.suppress_alg = True
 
     # Simulate
+    t_0 = timing.time()
     (t, y, yd) = simulator.simulate(final_time, ncp)
+    simul_time = timing.time() - t_0
+    stats = {'time': simul_time, 'steps': simulator.statistics['nsteps']}
 
     # Generate result for time and inputs
-    res = {}
+    class SimulationResult(dict):
+        pass
+    res = SimulationResult()
+    res.stats = stats
     res['time'] = t
     if u.numel() > 0:
         input_names = [var.getName() for var in model_inputs]
@@ -143,7 +158,7 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
         # Create function for computing solved algebraics
         for (_, sol_alg) in model._explicit_solved_algebraics:
             res[sol_alg.name] = []
-        alg_sol_f = casadi.MXFunction(model._known_vars, model._solved_expr) # TODO: Add model._solved_vars as function input?
+        alg_sol_f = casadi.MXFunction(model._known_vars + model._explicit_unsolved_vars, model._solved_expr)
         alg_sol_f.init()
         if expand_to_sx:
             alg_sol_f = casadi.SXFunction(alg_sol_f)
@@ -151,8 +166,8 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
 
         # Compute solved algebraics
         for k in xrange(len(t)):
-            for (i, known_var) in enumerate(model._known_vars):
-                alg_sol_f.setInput(res[known_var.getName()][k], i)
+            for (i, var) in enumerate(model._known_vars + model._explicit_unsolved_vars):
+                alg_sol_f.setInput(res[var.getName()][k], i)
             alg_sol_f.evaluate()
             for (j, sol_alg) in model._explicit_solved_algebraics:
                 res[sol_alg.name].append(alg_sol_f.getOutput(j).toScalar())
