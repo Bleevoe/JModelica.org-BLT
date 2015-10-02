@@ -13,7 +13,7 @@ import time
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "double_pendulum", "ccpp", "dist4"][2]
+    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "dist4"][6]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
@@ -21,8 +21,10 @@ if __name__ == "__main__":
     #~ blt = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
-    caus_opts['draw_blt'] = True
-    #~ caus_opts['solve_blocks'] = True
+    #~ caus_opts['draw_blt'] = True
+    caus_opts['solve_blocks'] = True
+    caus_opts['dense_tol'] = np.inf
+    #~ caus_opts['dense_tol'] = 10
     #~ caus_opts['ad_hoc_scale'] = True
     #~ caus_opts['inline'] = False
     #~ caus_opts['closed_form'] = True
@@ -42,6 +44,21 @@ if __name__ == "__main__":
             #~ caus_opts['uneliminable'] = ["y"]
             opt_opts = op.optimize_options()
             #~ opt_opts['expand_to_sx'] = "no"
+            caus_opts['linear_solver'] = "symbolicqr"
+    if problem == "triangular":
+        uneliminable = []
+        if source == "strings":
+            raise NotImplementedError
+        else:
+            class_name = "TriangularOpt"
+            file_paths = "simple.mop"
+            opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True}
+            op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
+
+            #~ caus_opts['uneliminable'] = ["y"]
+            opt_opts = op.optimize_options()
+            #~ opt_opts['expand_to_sx'] = "no"
+            opt_opts['IPOPT_options']['linear_solver'] = "ma27"
             caus_opts['linear_solver'] = "symbolicqr"
     if problem == "circuit":
         if source == "strings":
@@ -162,7 +179,7 @@ if __name__ == "__main__":
         opt_opts['n_e'] = 20
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = 10
-        opt_opts['IPOPT_options']['linear_solver'] = "ma97"
+        opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         opt_opts['IPOPT_options']['mu_init'] = 1e-3
     if blt:
         t_0 = time.time()
@@ -187,6 +204,24 @@ if __name__ == "__main__":
             #~ plt.plot(t, z)
             #~ plt.plot(t, u)
             plt.legend(['x', 'y'])
+            plt.show()
+    elif problem == "triangular":
+        t = res['time']
+        n = res['n'][0]
+        x = res['x[%d]' % n]
+        y = res['y[%d]' % n]
+        u = res['u']
+        #~ z = res['z']
+        #~ u = res['u']
+
+        if with_plots:
+            plt.close(101)
+            plt.figure(101)
+            plt.plot(t, x)
+            plt.plot(t, y)
+            #~ plt.plot(t, z)
+            plt.plot(t, u)
+            plt.legend(['x', 'y', 'u'])
             plt.show()
     elif problem == "circuit":
         t = res['time']
@@ -389,6 +424,3 @@ if __name__ == "__main__":
              plt.plot(time, rev2angle)
 
 solver = res.solver
-c_e = casadi.MXFunction([solver.xx, solver.pp], [solver.c_e])
-c_e.init()
-init_res = c_e.call([solver.primal_opt, solver._par_vals])[0].toArray()

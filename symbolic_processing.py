@@ -71,6 +71,11 @@ class CausalizationOptions(dict):
             See http://casadi.sourceforge.net/api/html/d8/d6a/classcasadi_1_1LinearSolver.html for possibilities
 
             Default: "symbolicqr"
+
+        dense_tol --
+            Tolerance for controlling density in causalized system. Possible values: [1, inf]
+
+            Default: 15
     """
 
     def __init__(self):
@@ -84,6 +89,7 @@ class CausalizationOptions(dict):
         self['inline_solved'] = False
         self['uneliminable'] = []
         self['linear_solver'] = "symbolicqr"
+        self['dense_tol'] = 10
 
         # Experimental options to be removed
         self['rescale'] = False
@@ -212,6 +218,7 @@ class Component(object):
             self.torn = self._is_torn()
         else:
             self.torn = None
+        self.sparsity_preserving = None
 
     def _is_solvable(self):
         """
@@ -517,15 +524,18 @@ class BipartiteGraph(object):
                 lw = 2
                 if component.solvable:
                     if component.linear:
-                        if component.torn:
-                            color = 'm'
-                            if hasattr(component, 'fcn'):
-                                ls = '--'
-                                n_torn = len(component.block_tear_vars)
-                                plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
-                                plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
+                        if component.sparsity_preserving:
+                            if component.torn:
+                                color = 'm'
+                                if hasattr(component, 'fcn'):
+                                    ls = '--'
+                                    n_torn = len(component.block_tear_vars)
+                                    plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
+                                    plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
+                            else:
+                                color = 'g'
                         else:
-                            color = 'g'
+                            color = 'c'
                     else:
                         color = 'r'
                 else:
@@ -819,6 +829,7 @@ class BLTModel(object):
             raise ValueError("inline has to be true when closed_form is")
         self._model = model
         self._create_bipgraph()
+        self._setup_dependencies()
         self._create_residuals()
         self._print_statistics()
 
@@ -920,6 +931,15 @@ class BLTModel(object):
         if self.options['plots']:
             self._graph.draw(11)
 
+    def _setup_dependencies(self):
+        """
+        Setup structure for computing variable dependencies for preserving sparsity.
+        """
+        self._dependencies = dependencies = {}
+        for vk in ['x', 'u']:
+            for var in self._mx_var_struct[vk]:
+                dependencies[var.getName()] = 1
+
     def _create_residuals(self):
         # Create list of named MX variables
         mx_var_struct = self._mx_var_struct
@@ -929,7 +949,7 @@ class BLTModel(object):
         x = mx_var_struct['x']
         u = mx_var_struct['u']
         w = mx_var_struct['w']
-        known_vars = time + x + u
+        self._known_vars = known_vars = time + x + u
         options = self.options
         if options['closed_form']:
             sx_time = [casadi.SX.sym("time")]
@@ -949,19 +969,19 @@ class BLTModel(object):
 
         # Create expression
         residuals = []
-        solved_vars = []
-        solved_expr = []
-        explicit_solved_vars = []
-        explicit_unsolved_vars = []
-        explicit_solved_algebraics = []
-        explicit_unsolved_algebraics = []
+        self._solved_vars = solved_vars = []
+        self._explicit_solved_vars = explicit_solved_vars = []
+        self._explicit_unsolved_vars = explicit_unsolved_vars = []
+        self._solved_expr = solved_expr = []
+        self._explicit_solved_algebraics = explicit_solved_algebraics = []
+        self._explicit_unsolved_algebraics = explicit_unsolved_algebraics = []
         alg_sols = []
         n_solvable = 0
         n_unsolvable = 0
         if options['inline']:
             inlined_solutions = []
         for co in self._graph.components:
-            if co.solvable and co.linear:
+            if co.solvable and co.linear and self._sparsity_preserving(co):
                 n_solvable += co.n
                 if co.torn:
                     global_index = prev_co.vertices[-1].equation.global_blt_index + 1
@@ -1141,6 +1161,9 @@ class BLTModel(object):
                         sx_solved_vars += [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in co.mx_vars]]
                     solved_expr.extend([sol[i] for i in range(sol.numel())])
             else:
+                for var in co.variables:
+                    self._dependencies[var.name] = 1
+                
                 n_unsolvable += co.n
                 explicit_unsolved_algebraics.extend([var.mvar for var in co.variables if not var.is_der])
                 explicit_unsolved_vars.extend(co.mx_vars)
@@ -1168,19 +1191,46 @@ class BLTModel(object):
         self._dae_residual = casadi.vertcat(residuals)
         self._explicit_unsolved_algebraics = [var for var in self._model.getVariables(self.REAL_ALGEBRAIC) if
                                               var in explicit_unsolved_algebraics] # Preserve order
-        self._explicit_solved_algebraics = explicit_solved_algebraics
         self._solved_algebraics_mvar = [var[1].mvar for var in explicit_solved_algebraics]
-        self._solved_vars = solved_vars
-        self._explicit_solved_vars = explicit_solved_vars
-        self._explicit_unsolved_vars = explicit_unsolved_vars
-        self._solved_expr = solved_expr
-        self._known_vars = known_vars
         self.n_solvable = n_solvable
         self.n_unsolvable = n_unsolvable
 
         # Draw BLT
         if options['plots'] or options['draw_blt']:
             self._graph.draw_blt()
+
+    def _sparsity_preserving(self, co):
+        """
+        Check whether system sparsity is sufficiently preserved if block is solved.
+        """
+        # Find dependencies
+        block_var_names = [var.getName() for var in co.mx_vars]
+        dep_names = []
+        for i in xrange(co.n):
+            for vk in ['dx', 'x', 'u', 'w']:
+                for var in self._mx_var_struct[vk]:
+                    if casadi.dependsOn(co.eq_expr[i], [var]) and not var.getName() in block_var_names:
+                        dep_names.append(var.getName())
+        dep_names = list(set(dep_names))
+
+        # Count causalized dependencies
+        n_dependencies = 0
+        for dep in dep_names:
+            n_dependencies += self._dependencies[dep]
+
+        # Count incidences
+        n_incidences = 0
+        for var in co.variables:
+            n_incidences = np.max([n_incidences, self._graph.incidences.getcol(var.global_index).getnnz()])
+
+        if (n_dependencies - 1) * np.sqrt(n_incidences) > self.options['dense_tol']:
+            co.sparsity_preserving = False
+            return False
+        else:
+            for var in co.variables:
+                self._dependencies[var.name] = n_dependencies
+            co.sparsity_preserving = True
+            return True
 
     def _print_statistics(self):
         """
@@ -1375,7 +1425,7 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
         for (i, sol_alg) in self._explicit_solved_algebraics:
             res[sol_alg.name] = []
             explicit_solved_expr.append(self._solved_expr[i])
-        alg_sol_f = casadi.MXFunction(self._known_vars + model._explicit_unsolved_vars, explicit_solved_expr)
+        alg_sol_f = casadi.MXFunction(self._known_vars + self._explicit_unsolved_vars, explicit_solved_expr)
         alg_sol_f.init()
         if op_res.solver.expand_to_sx != "no":
             alg_sol_f = casadi.SXFunction(alg_sol_f)
@@ -1383,7 +1433,7 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
 
         # Compute solved algebraics
         for k in xrange(len(res['time'])):
-            for (i, var) in enumerate(self._known_vars + model._explicit_unsolved_vars):
+            for (i, var) in enumerate(self._known_vars + self._explicit_unsolved_vars):
                 alg_sol_f.setInput(res[var.getName()][k], i)
             alg_sol_f.evaluate()
             for (i, sol_alg) in enumerate(self._explicit_solved_algebraics):

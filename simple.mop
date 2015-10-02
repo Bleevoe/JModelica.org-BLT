@@ -1,9 +1,9 @@
 model Simple
-    Real x;
-    Real y;
+    Real x(start=1, fixed=true);
+    Real y_L;
 equation
-    der(x) = x + y;
-    x = time;
+    der(x) = -x ;
+    der(x) = -x + y_L - 1;
 end Simple;
 
 model Simple_2
@@ -24,5 +24,29 @@ optimization Simple_Opt(objectiveIntegrand=x^2, finalTime=10)
     extends Simple;
 end Simple_Opt;
 
+optimization Triangular
+	constant Integer n = 30;
+	Real x[n](each start=1, each fixed=true);
+	Real y[n];
+equation
+	der(x[1]) = x[1] - y[1];
+	y[1] = x[1];
+	for i in 2 : n loop
+		der(x[i]) = x[i] - y[i];
+		y[i] = x[i] + cos(y[i-1]);
+	end for;
+end Triangular;
 
-
+optimization TriangularOpt(objectiveIntegrand=50*n*(x[n] - 2)^2 + u^2, finalTime=3)
+	constant Integer n = 20;
+	Real x[n](each start=1, each fixed=true);
+	Real y[n];
+	input Real u(min=-1, max=1);
+equation
+	der(x[1]) = x[1] - y[1] + u;
+	y[1] = x[1];
+	for i in 2 : n loop
+		der(x[i]) = x[i] - y[i];
+		y[i] = x[i] - cos(y[i-1]);
+	end for;
+end TriangularOpt;
