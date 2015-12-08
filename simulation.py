@@ -11,7 +11,7 @@ import time as timing
 
 def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []), ncp=500, blt=True,
              causalization_options=sp.CausalizationOptions(), expand_to_sx=True, suppress_alg=False,
-             rtol=1e-8, atol=1e-6, solver="IDA"):
+             tol=1e-8, solver="IDA"):
     """
     Simulate model from CasADi Interface using CasADi.
 
@@ -28,8 +28,9 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     if causalization_options['closed_form']:
         solved_vars = model._solved_vars
         solved_expr = model._solved_expr
-        for (var, expr) in itertools.izip(solved_vars, solved_expr):
-            print('%s := %s' % (var.getName(), expr))
+        #~ for (var, expr) in itertools.izip(solved_vars, solved_expr):
+            #~ print('%s := %s' % (var.getName(), expr))
+        return model
         dh() # This is not a debug statement!
 
     # Extract model variables
@@ -89,6 +90,53 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     dae_res.setOption("name", "complete_dae_residual")
     dae_res.init()
 
+    ###################
+    #~ import matplotlib.pyplot as plt
+    #~ h = MX.sym("h")
+    #~ iter_matrix_expr = dae_res.jac(2)/h + dae_res.jac(1)
+    #~ iter_matrix = MXFunction([t, y, yd, u, h], [iter_matrix_expr])
+    #~ iter_matrix.init()
+    #~ n = 100;
+    #~ hs = np.logspace(-8, 1, n);
+    #~ conds = [np.linalg.cond(iter_matrix.call([0, y0, yd0, input(0), hval])[0].toArray()) for hval in hs]
+    #~ plt.close(1)
+    #~ plt.figure(1)
+    #~ plt.loglog(hs, conds, 'b-')
+    #~ #plt.gca().invert_xaxis()
+    #~ plt.grid('on')
+
+    #~ didx = range(4, 12) + range(30, 33)
+    #~ aidx = [i for i in range(33) if i not in didx]
+    #~ didx = range(10)
+    #~ aidx = []
+    #~ F = MXFunction([t, y, yd, u], [dae[didx]])
+    #~ F.init()
+    #~ G = MXFunction([t, y, yd, u], [dae[aidx]])
+    #~ G.init()
+    #~ dFddx = F.jac(2)[:, :n_x]
+    #~ dFdx = F.jac(1)[:, :n_x]
+    #~ dFdy = F.jac(1)[:, n_x:]
+    #~ dGdx = G.jac(1)[:, :n_x]
+    #~ dGdy = G.jac(1)[:, n_x:]
+    #~ E_matrix = MXFunction([t, y, yd, u, h], [dFddx])
+    #~ E_matrix.init()
+    #~ E_cond = np.linalg.cond(E_matrix.call([0, y0, yd0, input(0), hval])[0].toArray())
+    #~ iter_matrix_expr = vertcat([horzcat([dFddx + h*dFdx, h*dFdy]), horzcat([dGdx, dGdy])])
+    #~ iter_matrix = MXFunction([t, y, yd, u, h], [iter_matrix_expr])
+    #~ iter_matrix.init()
+    #~ n = 100
+    #~ hs = np.logspace(-8, 1, n)
+    #~ conds = [np.linalg.cond(iter_matrix.call([0, y0, yd0, input(0), hval])[0].toArray()) for hval in hs]
+    #~ plt.loglog(hs, conds, 'b--')
+    #~ plt.gca().invert_xaxis()
+    #~ plt.grid('on')
+    #~ plt.xlabel('$h$')
+    #~ plt.ylabel('$\kappa$')
+    
+    #~ plt.show()
+    #~ dh()
+    ###################
+
     # Expand to SX
     if expand_to_sx:
         dae_res = SXFunction(dae_res)
@@ -111,8 +159,22 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
         simulator = Radau5DAE(problem)
     else:
         raise ValueError("Unknown solver %s" % solver)
-    simulator.rtol = rtol
-    simulator.atol = atol * np.ones([n_y, 1])
+    simulator.rtol = tol
+    simulator.atol = tol * 10 * np.array([model.get_attr(var, "nominal") for var in model_states + model_algs])
+    #~ simulator.atol = tol * np.ones([n_y, 1])
+    simulator.report_continuously = True
+
+    # Log method order
+    if solver == "IDA":
+        global order
+        order = []
+        def handle_result(solver, t, y, yd):
+            global order
+            order.append(solver.get_last_order())
+            solver.t_sol.extend([t])
+            solver.y_sol.extend([y])
+            solver.yd_sol.extend([yd])
+        problem.handle_result = handle_result
 
     # Suppress algebraic variables
     if suppress_alg:
@@ -127,6 +189,8 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     (t, y, yd) = simulator.simulate(final_time, ncp)
     simul_time = timing.time() - t_0
     stats = {'time': simul_time, 'steps': simulator.statistics['nsteps']}
+    if solver == "IDA":
+        stats['order'] = order
 
     # Generate result for time and inputs
     class SimulationResult(dict):
@@ -188,4 +252,5 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
         if var.getVariability() == var.CONTINUOUS:
             res[var.getName()] = np.array(res[var.getModelVariable().getName()])
     res["time"] = np.array(res["time"])
+    res._blt_model = blt_model
     return res

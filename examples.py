@@ -7,12 +7,13 @@ from pyfmi import load_fmu
 import matplotlib.pyplot as plt
 import os
 from pyjmi.common.io import ResultDymolaTextual
+from pyjmi.optimization.casadi_collocation import LocalDAECollocationAlgResult
 from pyjmi.common.core import TrajectoryLinearInterpolation
 
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "dist4"][0]
+    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4"][0]
     source = ["Modelica", "strings"][0]
     
     blt = True
@@ -32,8 +33,8 @@ if __name__ == "__main__":
     #~ caus_opts['inline_solved'] = True
 
     if problem == "simple":
-        #~ caus_opts['tearing'] = True
-        #~ caus_opts['tear_vars'] = ['z']
+        caus_opts['tearing'] = True
+        caus_opts['tear_vars'] = ['z']
         start_time = 0.
         final_time = 10.
         input = lambda t: []
@@ -45,8 +46,9 @@ if __name__ == "__main__":
         else:
             class_name = "Simple"
             file_paths = "simple.mop"
-            opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': False, 'index_reduction': False,
-					'equation_sorting': False, 'automatic_add_initial_equations': False}
+            #~ opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True, 'index_reduction': False,
+					#~ 'equation_sorting': False, 'automatic_add_initial_equations': False}
+            opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True}
             model = transfer_model(class_name, file_paths, compiler_options=opts)
             init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
     if problem == "circuit":
@@ -133,6 +135,37 @@ if __name__ == "__main__":
         opts = {'generate_html_diagnostics': True}
         model = transfer_model(class_name, file_paths, compiler_options=opts)
         init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
+    if problem == "double_pendulum":
+        if source != "Modelica":
+            raise ValueError
+        class_name = "DoublePendulum"
+        file_path = "double_pendulum.mop"
+        opts = {'generate_html_diagnostics': True, 'dynamic_states': True, 'index_reduction': True, 'automatic_add_initial_equations': True}
+        #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
+        init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts))
+        model = transfer_model(class_name, file_path, compiler_options=opts)
+
+        start_time = 0.
+        final_time = 10.
+        ncp = 500
+    if problem == "hrsg":
+        #~ caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
+        if source != "Modelica":
+            raise ValueError
+        class_name = "HeatRecoveryOptim.Plant_sim"
+        file_paths = ['OCTTutorial','HeatRecoveryOptim.mop']
+        opts = {'generate_html_diagnostics': True, 'state_initial_equations': False, 'inline_functions': 'none'}
+        model = transfer_model(class_name, file_paths, compiler_options=opts)
+        init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
+
+        init_res = ResultDymolaTextual('hrsg_guess.txt')
+        inputs = ['uFP_der_ext', 'uSH_der_ext', 'uRH_der_ext']
+        input_trajs = [TrajectoryLinearInterpolation(init_res.get_variable_data(name).t,
+													 init_res.get_variable_data(name).x.reshape(-1, 1)) for name in inputs]
+        input = lambda t: [traj.eval(t)[0, 0] for traj in input_trajs]
+        start_time = 400.
+        final_time = 5400.
+        ncp = 500
     if problem == "dist4":
         #~ caus_opts['uneliminable'] = ['Dist', 'Bott']
         if source != "Modelica":
@@ -168,18 +201,6 @@ if __name__ == "__main__":
             init_fmu.set('Temp_init[' + `i` + ']', break_res.get_variable_data('Temp[' + `i` + ']').x[-1])
             if i < 42:
                 init_fmu.set('V_init[' + `i` + ']', break_res.get_variable_data('V[' + `i` + ']').x[-1])
-    if problem == "double_pendulum":
-        if source != "Modelica":
-            raise ValueError
-        class_name = "DoublePendulum"
-        file_path = "double_pendulum.mop"
-        opts = {'generate_html_diagnostics': True}
-        model = transfer_model(class_name, file_path)
-        init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
-
-        start_time = 0.
-        final_time = 10.
-        ncp = 500
 
     # Compute initial conditions
     if source == "Modelica":
@@ -196,8 +217,24 @@ if __name__ == "__main__":
     #~ init_cond = {'der(x)': 1, 'x': 0, 'y': 1}
 
     # Simulate and plot
-    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, rtol=1e-8, atol=1e-6)
-    if problem == "circuit":
+    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, tol=1e-8)
+    if problem == "simple":
+        t = res['time']
+        a = res['a']
+        x = res['x']
+        y = res['y']
+        z = res['z']
+
+        if with_plots:
+            plt.close(101)
+            plt.figure(101)
+            plt.plot(t, a)
+            plt.plot(t, x)
+            plt.plot(t, y)
+            plt.plot(t, z)
+            plt.legend(['a', 'x', 'y', 'z'])
+            plt.show()
+    elif problem == "circuit":
         t = res['time']
         iL = res['iL']
         i0 = res['i0']
@@ -228,20 +265,6 @@ if __name__ == "__main__":
             plt.plot(t, u2)
             plt.plot(t, u3)
             plt.legend(['uL', 'u0', 'u1', 'u2'])
-            plt.show()
-    elif problem == "simple":
-        t = res['time']
-        x = res['x']
-        y = res['y']
-        #~ z = res['z']
-
-        if with_plots:
-            plt.close(101)
-            plt.figure(101)
-            plt.plot(t, x)
-            plt.plot(t, y)
-            #~ plt.plot(t, z)
-            plt.legend(['x', 'y'])
             plt.show()
     elif problem == "vehicle":
         time = res['time']
@@ -301,6 +324,46 @@ if __name__ == "__main__":
             plt.grid(True)
             plt.ylabel('input load')
             plt.xlabel('time [s]')
+            plt.show()
+    
+        elif problem == "hrsg":
+            Tgasin=res['sys.gasSource.T']
+            uRHP=res['sys.valve_integrator_RH.y']
+            uSHP=res['sys.valve_integrator_SH.y']
+            SHTRef=res['SHTRef']
+            SHPRef=res['SHPRef']
+            RHPRef=res['RHPRef']
+            plt.figure(2)
+            plt.subplot(411)
+            plt.plot(res['time'],res['sys.SH2.T_water_out'],'r', label = 'SH2 T steam out [K]')
+            plt.plot(res['time'],res['sys.RH.T_water_out'], label = 'RH T steam out [K]')
+            plt.plot(res['time'],Tgasin,'g', label = 'T gas [K]')
+            plt.plot(res['time'],SHTRef,'r--', label = 'SH T reference [K]')
+            plt.ylabel('Temp. [K]')
+            plt.legend()
+            plt.grid()
+            plt.subplot(412)
+            plt.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r', label = 'SH2 p steam out [bar]')
+            plt.plot(res['time'],res['sys.RH.water_out.p']/1e5,  label = 'SH p steam out [bar]')
+            plt.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
+            plt.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
+            plt.ylabel('Pressure [bar]')
+            plt.legend()
+            plt.grid()
+            plt.subplot(413)
+            plt.plot(res['time'],uSHP, label = 'SH valve position')
+            plt.plot(res['time'],uRHP,'r', label = 'RH valve position')
+            plt.legend()
+            plt.grid()
+            plt.ylabel('Position')
+            plt.subplot(414)
+            plt.plot(res['time'],res['dT_SH2'], label = 'dT SH 2 [K]')
+            plt.plot(res['time'],res['dT_RH'],'g', label = 'dT RH 2 [K]')
+            plt.plot(res['time'],res['dTMax_SH2'],'b--', label = 'max dT SH 2 [K]')
+            plt.plot(res['time'],res['dTMax_RH'],'g--', label = 'max dT RH [K]')
+            plt.grid()
+            plt.ylabel('dT [K]')
+            plt.legend()
             plt.show()
     elif problem == "dist4":
         ref_T_14 = res['Temp[28]']

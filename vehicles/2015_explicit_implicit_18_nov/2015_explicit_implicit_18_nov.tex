@@ -15,6 +15,7 @@
 \usepackage{lipsum}
 \usepackage{epstopdf}
 \usepackage{bm}
+\newcommand{\cond}{\mathbf{cond}}
 
 \newcommand\gsout{\bgroup\markoverwith
 {\textcolor{green}{\rule[3.1pt]{2pt}{1pt}}}\ULon}
@@ -28,7 +29,7 @@
 
 % Title page
 \title{Implicit vs. explicit ODE}
-\author{Fredrik Magnusson\inst{1} \and Karl Berntorp\inst{2} \\ Christan \& Claus?}
+\author{Fredrik Magnusson\inst{1} \and Karl Berntorp\inst{2}}
 \institute
 {
 \inst{1} Department of Automatic Control \\
@@ -39,7 +40,7 @@ Cambridge, MA \\
 \vspace{14pt}
 \insertdate
 }
-\date{October 15, 2015}
+\date{November 18, 2015}
 
 
 % Slide numbering
@@ -65,15 +66,13 @@ Cambridge, MA \\
 Last time:
 \begin{itemize}
 \item
-Compared simulation results for implicit DAE and explicit ODE with IDA and Radau5
+Problem does not seem almost high index
+\begin{itemize}
 \item
-Implicit DAE formulation needs 10-20 times more steps
+Even if it did, variable scaling should solve the problem
+\end{itemize}
 \item
-Suppressing algebraic variables behaves very similarly to explicit ODE
-\item
-Pacejka Magic Formula (algebraic equation) stiff
-\item
-Surprisingly large relative errors with ODE formulation
+Test snow
 \end{itemize}
 \end{frame}
 
@@ -82,206 +81,102 @@ Surprisingly large relative errors with ODE formulation
 This time:
 \begin{itemize}
 \item
-Revisit the error comparisons
+Proper absolute tolerances solves everything
 \item
-Discuss optimization formulation and solution procedure
-\item
-Discuss if the observed simulation phenomena regarding DAE vs. ODE are related to optimization
+Still some open questions, including optimization
 \end{itemize}
 \end{frame}
 
-\begin{frame}
-\frametitle{Partial DAE}
+\begin{frame}[fragile]
+\frametitle{Absolute tolerance}
 \begin{itemize}
 \item
-Last time considered eliminating all algebraics except the 4 nominal forces (Magic formula)
+Previously used \verb|atol = rtol|
 \item
-I tested this as well, and call it DAE par.
+Model contains decent nominal values \verb|nom| for all variables
+\item
+Instead use \verb|atol = 10*nom*rtol|
 \end{itemize}
 \end{frame}
 
 \begin{frame}
 \frametitle{Simulation results}
-Radau5 tolerance chosen to get reference solution, the rest to get similar accuracy
+Radau5 is reference solution, others have same accuracy
 
 {\small
 \begin{table}
 \centering
-\begin{tabular}{lccccc}
+\begin{tabular}{lcc}
 \toprule
-Setup & tol & Time [s] & Steps [1000] & Evals [1000] & Order \\
+Setup & tol & Steps [1000] \\
 \midrule
-Radau5 DAE & 1e-12 & 69 & 17 & 640 & 5 \\
-IDA DAE & 1e-6 & 59 & 26 & 930 & 4 \\
-IDA DAE sup. alg. & 1e-8 & 2.8 & 2.9 & 42 & 3 \\
-IDA DAE par. & 1e-6 & 6.3 & 8 & 102 & 5 \\
-IDA ODE & 1e-8 & 0.9 & 3.4 & 15 & 3 \\
+Radau5 DAE & 1e-14 & 4.3 \\
+IDA DAE & 1e-7 & 2.2 \\
+IDA DAE sup. alg. & 1e-8 & 2.0 \\
+IDA DAE par. & 1e-7 & 2.0 \\
+IDA DAE par. sup. & 1e-8 & 2.2 \\
+IDA ODE & 1e-8 & 2.3 \\
 \bottomrule
 \end{tabular}
 \end{table}
 }
+
+Conclusion: Algebraic error control was running amok due to unreasonable tolerances for algebraics
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{Radau5 DAE}
-{\small
-\begin{verbatim}
-Final Run Statistics: --- 
-
- Number of steps                                 : 16701
- Number of function evaluations                  : 231074
- Number of Jacobian evaluations                  : 12338
- Number of function eval. due to Jacobian eval.  : 407154
- Number of error test failures                   : 1040
- Number of LU decompositions                     : 21266
-
-Solver options:
-
- Solver                  : Radau5 (implicit)
- Tolerances (absolute)   : [  1.00000000e-12]
- Tolerances (relative)   : 1e-12
-\end{verbatim}
-}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{IDA DAE}
-{\small
-\begin{verbatim}
-Final Run Statistics: --- 
-
- Number of steps                                 : 26361
- Number of function evaluations                  : 67823
- Number of Jacobian evaluations                  : 25991
- Number of function eval. due to Jacobian eval.  : 857703
- Number of error test failures                   : 12046
- Number of nonlinear iterations                  : 67823
- Number of nonlinear convergence failures        : 0
-
-Solver options:
-
- Solver                       : IDA (BDF)
- Maximal order                : 5
- Suppressed algebr. variables : False
- Tolerances (absolute)        : 1e-06
- Tolerances (relative)        : 1e-06
-\end{verbatim}
-}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{IDA DAE sup. alg.}
-{\small
-\begin{verbatim}
-Final Run Statistics: --- 
-
- Number of steps                                 : 2923
- Number of function evaluations                  : 7072
- Number of Jacobian evaluations                  : 1065
- Number of function eval. due to Jacobian eval.  : 35145
- Number of error test failures                   : 424
- Number of nonlinear iterations                  : 7072
- Number of nonlinear convergence failures        : 0
-
-Solver options:
-
- Solver                       : IDA (BDF)
- Maximal order                : 5
- Suppressed algebr. variables : True
- Tolerances (absolute)        : 1e-08
- Tolerances (relative)        : 1e-08
-\end{verbatim}
-}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{IDA DAE par.}
-{\small
-\begin{verbatim}
-Final Run Statistics: --- 
-
- Number of steps                                 : 8489
- Number of function evaluations                  : 18467
- Number of Jacobian evaluations                  : 5952
- Number of function eval. due to Jacobian eval.  : 83328
- Number of error test failures                   : 2867
- Number of nonlinear iterations                  : 18467
- Number of nonlinear convergence failures        : 0
-
-Solver options:
-
- Solver                       : IDA (BDF)
- Maximal order                : 5
- Suppressed algebr. variables : False
- Tolerances (absolute)        : 1e-06
- Tolerances (relative)        : 1e-06
-\end{verbatim}
-}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{IDA ODE}
-{\small
-\begin{verbatim}
-Final Run Statistics: --- 
-
- Number of steps                                 : 3428
- Number of function evaluations                  : 5524
- Number of Jacobian evaluations                  : 919
- Number of function eval. due to Jacobian eval.  : 9190
- Number of error test failures                   : 477
- Number of nonlinear iterations                  : 5524
- Number of nonlinear convergence failures        : 0
-
-Solver options:
-
- Solver                       : IDA (BDF)
- Maximal order                : 5
- Suppressed algebr. variables : False
- Tolerances (absolute)        : 1e-08
- Tolerances (relative)        : 1e-08
-\end{verbatim}
-}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Error}
+\begin{frame}
+\frametitle{Iteration matrix condition number}
+Consider
+\begin{align*}
+F(\dot x, x, y) &= 0 \\
+G(x, y) &= 0
+\end{align*}
 \begin{itemize}
 \item
-Reference solution $v$ from Radau5 with \verb|ATOL=RTOL=1e-12|
+BDF iteration matrix:
+\begin{equation}
+J = \begin{bmatrix}
+\frac{\alpha_0}{h} \nabla_{\dot x}F + \nabla_x F & \nabla_y F \\
+\nabla_x G & \nabla_y G
+\end{bmatrix}
+\end{equation}
 \item
-Compare with the various IDA solutions $\hat v$, all with \verb|ATOL=RTOL=1e-6|
+(Theorem 5.4.1) Condition number of iteration matrix is $\mathcal{O}(h^{-\nu})$
 \item
-Compute relative error as function of time for each variable kind:
-\[e_v(t) = \left|\left|\frac{v(t) - \hat v(t)}{v(t) + \epsilon_{\text{mach}}}\right|\right|_\infty, \quad \forall v \in \{\dot x, x, y\}\]
+Conjecture: If $\nabla_{\dot x}F = I$ and first row of $J$ is scaled by $h$, condition number is instead $\mathcal{O}(h^{-\nu-1})$
+\begin{itemize}
+\item
+What to do if $\nabla_{\dot x}F$ is not square? What does IDA do?
+\item
+Maybe I should do something like this in my collocation implementation?
+\end{itemize}
 \end{itemize}
 \end{frame}
 
 \begin{frame}
-\frametitle{Variable kind errors}
-\begin{figure}[ht]
+\frametitle{Condition number}
+\begin{columns}
+\column{0.5\linewidth}
 \centering
-\includegraphics[width=0.9\linewidth]{errors.png}
+DAE
+\begin{figure}[ht]
+\includegraphics[width=\linewidth]{dae_cond.png}
 \end{figure}
-\end{frame}
 
-\begin{frame}
-\frametitle{Variable kind errors}
-\begin{itemize}
-\item
-Is uniformly distributed communication points sensible?
-\item
-Is constant order reasonable?
-\item
-Can we conclude that ODE formulation is superior for simulation for this case? Can we figure out why?
-\end{itemize}
+\column{0.5\linewidth}
+\centering
+ODE
+\begin{figure}[ht]
+\includegraphics[width=\linewidth]{ode_cond.png}
+\end{figure}
+\end{columns}
 \end{frame}
 
 \begin{frame}
 \frametitle{Commutativity}
 \begin{itemize}
 \item
-Last time: Does BLT and fixed-step collocation commute?
+Previously: Does BLT and fixed-step collocation commute?
 \item
 Consider single integration step of
 \begin{equation}
@@ -448,7 +343,7 @@ Inherently ill-conditioned (see bonus slides)
 \frametitle{Restoration phase}
 \begin{itemize}
 \item
-For the high-level problem (if memory serves; to be confirmed by Karl), convergence is hampered by endless restoration
+For the high-level problem, IPOPT fails in restoration
 \item
 Restoration is triggered for various reasons, but usually because of ill-conditioned Jacobian
 \item
@@ -462,27 +357,7 @@ Restoration means that IPOPT stops solving the optimization problem and instead 
     \end{alignat*}
 \end{subequations}
 \item
-Failure to do this means that IPOPT can not even find a feasible point
-\end{itemize}
-\end{frame}
-
-\begin{frame}
-\frametitle{Next steps}
-\begin{itemize}
-\item
-Analyzing IPOPT convergence issues is complicated
-\begin{itemize}
-\item
-Next step I see in that direction is to compare $\text{cond}(\nabla_z F)$ for DAE and ODE formulation
-\item
-If significant difference, that is a likely explanation, but then we should try to figure out why there is a significant difference...
-\end{itemize}
-\item
-Still don't understand why ODE is better for simulation
-\begin{itemize}
-\item
-Probably not related to ill-conditioning?
-\end{itemize}
+IPOPT finds a local minimum to this problem which is not feasible; failure
 \end{itemize}
 \end{frame}
 

@@ -29,6 +29,11 @@ class CausalizationOptions(dict):
 
             Default: False
 
+        blt_strings --
+            Whether to annotate BLT form with strings for variables and equations.
+
+            Default: True
+
         solve_blocks --
             Whether to factorize coefficient matrices in non-scalar, linear blocks.
 
@@ -81,6 +86,7 @@ class CausalizationOptions(dict):
     def __init__(self):
         self['plots'] = False
         self['draw_blt'] = False
+        self['blt_strings'] = True
         self['solve_blocks'] = False
         self['tearing'] = False
         self['tear_vars'] = []
@@ -92,8 +98,6 @@ class CausalizationOptions(dict):
         self['dense_tol'] = 10
 
         # Experimental options to be removed
-        self['rescale'] = False
-        self['ad_hoc_scale'] = False
         self['analyze_var'] = None
 
 def scale_axis(figure=plt, xfac=0.08, yfac=0.08):
@@ -163,6 +167,13 @@ class Variable(object):
     def __str__(self):
         return self.name
 
+class Edge(object):
+
+    def __init__(self, equation, variable):
+        self.eq = equation
+        self.var = variable
+        self.linear = True
+
 class DigraphVertex(object):
 
     def __init__(self, index, equation, variable):
@@ -188,7 +199,7 @@ def find_deps(expr, mx_vars, deps=None):
 
 class Component(object):
 
-    def __init__(self, vertices, causalization_options, tear_vars):
+    def __init__(self, vertices, causalization_options, tear_vars, edges):
         # Define data structures
         self.options = causalization_options
         self.tear_vars = tear_vars
@@ -213,7 +224,7 @@ class Component(object):
 
         # Check equation properties
         self.solvable = self._is_solvable()
-        self.linear = self._is_linear()
+        self.linear = self._is_linear(edges)
         if self.solvable:
             self.torn = self._is_torn()
         else:
@@ -253,7 +264,7 @@ class Component(object):
         else:
             return False
 
-    def _is_linear(self):
+    def _is_linear(self, edges):
         """
         Check if unknowns can be solved for linearly in component.
 
@@ -264,13 +275,22 @@ class Component(object):
         res_f = casadi.MXFunction(self.mx_vars, self.eq_expr)
         res_f.setOption("name", "block_residual_for_solvability")
         res_f.init()
+        is_linear = True
         # Can probably create a SISO function and not nest loops in latest CasADi
         for i in xrange(self.n):
             for j in xrange(self.n):
                 # Check if jac[i, j] depends on block unknowns
                 if casadi.dependsOn(res_f.jac(i, j), self.mx_vars):
-                    return False
-        return True
+                    is_linear = False
+                    found_edges = 0
+                    for edge in edges:
+                        if (self.eq_expr[j].isEqual(edge.eq.expression) and
+                            self.mx_vars[i].isEqual(edge.var.mx_var)):
+                            edge.linear = False
+                            found_edges += 1
+                    if found_edges != 1:
+                        dh()
+        return is_linear
 
     def create_lin_eq(self, known_vars, solved_vars):
         """
@@ -281,7 +301,7 @@ class Component(object):
         if not self.solvable:
             raise RuntimeError("Can only create linear equation system for solvable blocks.")
         res = casadi.vertcat(self.eq_expr)
-        all_vars = self.mx_vars + known_vars + solved_vars 
+        all_vars = self.mx_vars + known_vars + solved_vars
         res_f = casadi.MXFunction(all_vars , [res])
         res_f.setOption("name", "block_residual_for_creating_linear_eq")
         res_f.init()
@@ -321,7 +341,7 @@ class Component(object):
         |   | | | = | |
         |C D| |y|   |b|,
 
-        where x are causalized block variables (since A is triangular) and y are tearing variables.
+        where x are causalized block variables (since A is lower triangular) and y are tearing variables.
 
         Defines fcn["alpha"], for all alpha in {A, B, C, D, a, b} as data attributes.
         """
@@ -436,9 +456,9 @@ class BipartiteGraph(object):
         # Create incidence matrix
         row = []
         col = []
-        for (eq, vari) in edges:
-            row.append(eq.local_index)
-            col.append(vari.local_index)
+        for edge in edges:
+            row.append(edge.eq.local_index)
+            col.append(edge.var.local_index)
         self.incidences = scipy.sparse.coo_matrix((np.ones(len(row)), (row, col)), shape=(self.n, self.n))
 
     def _reset(self):
@@ -459,10 +479,10 @@ class BipartiteGraph(object):
             plt.plot(0, -equation.local_index, 'go', ms=12)
         for variable in self.variables:
             plt.plot(1, -variable.local_index, 'ro', ms=12)
-        for (equation, variable) in self.edges:
+        for edge in self.edges:
             if self.matches is None:
                 style = 'b'
-            elif (equation, variable) in self.matches or (variable, equation) in self.matches:
+            elif (edge.eq, edge.var) in self.matches: # or (edge.var, edge.eq) in self.matches:
                 style = 'b'
             else:
                 style = 'b--'
@@ -488,9 +508,9 @@ class BipartiteGraph(object):
             right='off',
             labelbottom='off',
             labelleft='off')
-        for (eq, vari) in self.edges:
+        for edge in self.edges:
             if self.matches:
-                if (eq, vari) in self.matches:
+                if (edge.eq, edge.var) in self.matches:
                     style = 'ro'
                     ms = 10
                 else:
@@ -510,11 +530,21 @@ class BipartiteGraph(object):
                          rotation='vertical', verticalalignment='bottom')
         scale_axis(xfac=0.65, yfac=0.4)
 
-    def draw_blt(self, idx=99):
+    def draw_blt(self, idx=99, strings=False):
         # Draw BLT incidence matrix
         if self.components:
             plt.close(idx)
             plt.figure(idx)
+            if not strings:
+                plt.tick_params(
+                    axis='both',       # changes apply to both axes
+                    which='both',      # both major and minor ticks are affected
+                    bottom='off',      # ticks along the bottom edge are off
+                    top='off',         # ticks along the top edge are off
+                    left='off',
+                    right='off',
+                    labelbottom='off',
+                    labelleft='off')
             i = 0
             for component in self.components:
                 i_new = i + component.n - 1
@@ -545,22 +575,31 @@ class BipartiteGraph(object):
                 plt.plot([i, i_new], [-i_new, -i_new], color, lw=lw)
                 plt.plot([i_new, i_new], [-i, -i_new], color, lw=lw)
                 i = i_new - offset + 1
-            for (eq, vari) in self.edges:
-                if (eq, vari) in self.matches:
-                    style = 'ro'
-                    ms = 10
+            for edge in self.edges:
+                ms = 100.0 / self.n ** 0.8
+                if edge.var.is_der:
+                    marker='x'
+                    mew = 2
                 else:
-                    style = 'bo'
-                    ms = 8
-                plt.plot(vari.global_blt_index, -eq.global_blt_index, style, ms=ms)
+                    marker='o'
+                    mew = 1
+                if edge.linear:
+                    markerfacecolor='g'
+                    markeredgecolor='g'
+                else:
+                    markerfacecolor='r'
+                    markeredgecolor='r'
+                plt.plot(edge.var.global_blt_index, -edge.eq.global_blt_index, mew=mew,
+                         marker=marker, markerfacecolor=markerfacecolor, markeredgecolor=markeredgecolor, ms=ms)
             eq_offset = np.array([-0.2, -0.17])
             var_offset = np.array([-0.21, 0.22])
-            for equation in self.equations:
-                plt.annotate(equation.string, np.array([0, -equation.global_blt_index]) + eq_offset, color='k',
-                             horizontalalignment='right')
-            for variable in self.variables:
-                plt.annotate(variable.name, np.array([variable.global_blt_index, 0]) + var_offset, color='k',
-                             rotation='vertical', verticalalignment='bottom')
+            if strings:
+                for equation in self.equations:
+                    plt.annotate(equation.string, np.array([0, -equation.global_blt_index]) + eq_offset, color='k',
+                                 horizontalalignment='right')
+                for variable in self.variables:
+                    plt.annotate(variable.name, np.array([variable.global_blt_index, 0]) + var_offset, color='k',
+                                 rotation='vertical', verticalalignment='bottom')
             scale_axis()
             plt.show()
 
@@ -621,13 +660,13 @@ class BipartiteGraph(object):
         i = 0
         while set(L[-1]) & set(unmatched_varis) == set():
             if i % 2 == 0:
-                E_i = [(vari, eq) for (eq, vari) in self.edges if ((eq in L[i]) and (vari not in L_union) and ((eq, vari) not in self.matches))]
+                E_i = [(edge.var, edge.eq) for edge in self.edges if ((edge.eq in L[i]) and (edge.var not in L_union) and ((edge.eq, edge.var) not in self.matches))]
                 if i == 0 and len(E_i) == 0:
                     raise RuntimeError("The following equations contain no variables: %s" % L[0])
                 E.append(E_i)
                 L_i = self._remove_duplicates([vari for (vari, eq) in E_i])
             else:
-                E_i = [(eq, vari) for (eq, vari) in self.edges if ((vari in L[i]) and (eq not in L_union) and ((eq, vari) in self.matches))]
+                E_i = [(edge.eq, edge.var) for edge in self.edges if ((edge.var in L[i]) and (edge.eq not in L_union) and ((edge.eq, edge.var) in self.matches))]
                 E.append(E_i)
                 L_i = self._remove_duplicates([eq for (eq, vari) in E_i])
             i += 1
@@ -732,9 +771,10 @@ class BipartiteGraph(object):
 
         # Create edges (without self-loops)
         dig_edgs = []
-        for (eq, vari) in self.edges:
-            if (vari, eq) not in self.matches:
-                dig_edgs.append((eq.dig_vertex, vari.dig_vertex))
+        for edge in self.edges:
+            if (edge.eq, edge.var) not in self.matches:
+            #~ if (edge.var, edge.eq) not in self.matches:
+                dig_edgs.append((edge.eq.dig_vertex, edge.var.dig_vertex))
         self.dig_edgs = dig_edgs
 
         # Strong connect
@@ -778,7 +818,7 @@ class BipartiteGraph(object):
             vertices = []
             while self.stack and self.stack[-1].number >= v.number:
                 vertices.append(self.stack.pop())
-            self.components.append(Component(vertices, self.options, self.tear_vars))
+            self.components.append(Component(vertices, self.options, self.tear_vars, self.edges))
 
 def create_edges(equations, variables):
         """
@@ -794,7 +834,7 @@ def create_edges(equations, variables):
             deps = deps_incidence + deps_equal
             for (i, var) in enumerate(variables):
                 if deps[i]:
-                    edges.append((equation, var))
+                    edges.append(Edge(equation, var))
         return edges
 
 class BLTModel(object):
@@ -832,6 +872,8 @@ class BLTModel(object):
         self._setup_dependencies()
         self._create_residuals()
         self._print_statistics()
+        #~ if self.options['closed_form']:
+            #~ dh()
 
     def __getattr__(self, name):
         """
@@ -955,8 +997,8 @@ class BLTModel(object):
             sx_time = [casadi.SX.sym("time")]
             sx_x = [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in x]]
             sx_u = [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in u]]
-            sx_known_vars = sx_time + sx_x + sx_u
-            sx_solved_vars = []
+            self._sx_known_vars = sx_known_vars = sx_time + sx_x + sx_u
+            self._sx_solved_vars = sx_solved_vars = []
 
         # Match equations and variables
         self._graph.maximum_match()
@@ -965,7 +1007,7 @@ class BLTModel(object):
         self._graph.scc()
         if options['plots']:
             self._graph.draw(13)
-            self._graph.draw_blt(98)
+            self._graph.draw_blt(98, True)
 
         # Create expression
         residuals = []
@@ -1079,32 +1121,6 @@ class BLTModel(object):
                     else:
                         b_input = co.n * [1.] + known_vars + solved_expr
                     b = co.b_fcn.call(b_input, self.options['inline'])[0]
-
-                    # TODO: REMOVE THIS!
-                    if options['ad_hoc_scale']:
-                        if co.mvars[0].getName() == 'der(plant.evaporator.alpha)': # der(plant.evaporator.p)
-                            nominals = [8.55e-09, 1.07e3]
-                            scale = True
-                        elif co.mvars[0].getName() == 'der(RH1.pFluid)': # der(RH1.hFluid)
-                            nominals = [1.5e4, 5e2]
-                            nominals = [1., 1.]
-                            scale = True
-                        else:
-                            scale = False
-                        if scale:
-                            D = np.diag(nominals)
-                            A = casadi.mul(D, A)
-                            b = casadi.mul(D, b)
-                            known_mvars = [self.getVariable(var.getName()) for var in known_vars[1:]]
-                            solved_mvars = [self.getVariable(var.getName()) for var in solved_vars]
-                            
-                            nominal_x = [self.get_attr(var, "nominal") for var in co.mvars]
-                            nominal_known = [1.] + [self.get_attr(var, "nominal") for var in known_mvars]
-                            nominal_solved = [self.get_attr(var, "nominal") for var in solved_mvars]
-
-                            A_nom = co.A_fcn.call(co.n * [np.nan] + nominal_known + nominal_solved)[0]
-                            b_nom = co.b_fcn.call(co.n * [1] + nominal_known + nominal_solved)[0]
-                            sol = casadi.solve(A_nom, b_nom, options['linear_solver'])
                         
                     # Solve
                     if options['closed_form']:
@@ -1148,12 +1164,6 @@ class BLTModel(object):
                         else:
                             explicit_solved_algebraics.append((len(solved_vars) + i, var))
 
-                    ### TODO: REMOVE THIS! ###
-                    if options['rescale']:
-                        if co.mvars[0].getName() == 'der(plant.evaporator.alpha)': # der(plant.evaporator.p)
-                            residuals[-2:] = casadi.mul(A, casadi.vertcat(residuals[-2:]))
-                    ##########################
-
                     # Store solution
                     solved_vars.extend(co.mx_vars)
                     explicit_solved_vars.extend(co.mx_vars)
@@ -1161,30 +1171,34 @@ class BLTModel(object):
                         sx_solved_vars += [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in co.mx_vars]]
                     solved_expr.extend([sol[i] for i in range(sol.numel())])
             else:
-                for var in co.variables:
-                    self._dependencies[var.name] = 1
-                
-                n_unsolvable += co.n
-                explicit_unsolved_algebraics.extend([var.mvar for var in co.variables if not var.is_der])
-                explicit_unsolved_vars.extend(co.mx_vars)
-                if options['closed_form']:
-                    # Create SX residual
-                    res = casadi.vertcat(co.eq_expr)
-                    all_vars = co.mx_vars + known_vars + solved_vars 
-                    res_f = casadi.MXFunction(all_vars , [res])
-                    res_f.init()
-                    sx_res = casadi.SXFunction(res_f)
-                    sx_res.init()
-                    residuals.extend(sx_res.call(co.sx_vars + sx_known_vars + solved_expr, True))
-                    solved_expr.extend(co.sx_vars)
+                if co.torn:
+                    dh()
+                    # Implement!
                 else:
-                    res = casadi.vertcat(co.eq_expr)
-                    all_vars = co.mx_vars + known_vars + solved_vars 
-                    res_f = casadi.MXFunction(all_vars , [res])
-                    res_f.init()
-                    residuals.extend(res_f.call(co.mx_vars + known_vars + solved_expr))
-                    solved_expr.extend(co.mx_vars)
-                solved_vars.extend(co.mx_vars)
+                    for var in co.variables:
+                        self._dependencies[var.name] = 1
+                    
+                    n_unsolvable += co.n
+                    explicit_unsolved_algebraics.extend([var.mvar for var in co.variables if not var.is_der])
+                    explicit_unsolved_vars.extend(co.mx_vars)
+                    if options['closed_form']:
+                        # Create SX residual
+                        res = casadi.vertcat(co.eq_expr)
+                        all_vars = co.mx_vars + known_vars + solved_vars 
+                        res_f = casadi.MXFunction(all_vars , [res])
+                        res_f.init()
+                        sx_res = casadi.SXFunction(res_f)
+                        sx_res.init()
+                        residuals.extend(sx_res.call(co.sx_vars + sx_known_vars + solved_expr, True))
+                        solved_expr.extend(co.sx_vars)
+                    else:
+                        res = casadi.vertcat(co.eq_expr)
+                        all_vars = co.mx_vars + known_vars + solved_vars 
+                        res_f = casadi.MXFunction(all_vars , [res])
+                        res_f.init()
+                        residuals.extend(res_f.call(co.mx_vars + known_vars + solved_expr))
+                        solved_expr.extend(co.mx_vars)
+                    solved_vars.extend(co.mx_vars)
             prev_co = co
 
         # Save results
@@ -1197,7 +1211,7 @@ class BLTModel(object):
 
         # Draw BLT
         if options['plots'] or options['draw_blt']:
-            self._graph.draw_blt()
+            self._graph.draw_blt(strings=options['blt_strings'])
 
     def _sparsity_preserving(self, co):
         """
@@ -1223,7 +1237,8 @@ class BLTModel(object):
         for var in co.variables:
             n_incidences = np.max([n_incidences, self._graph.incidences.getcol(var.global_index).getnnz()])
 
-        if (n_dependencies - 1) * np.sqrt(n_incidences) > self.options['dense_tol']:
+        # Compute density measure
+        if (n_dependencies - 2) * np.sqrt(n_incidences - 1) >= self.options['dense_tol']:
             co.sparsity_preserving = False
             return False
         else:
@@ -1421,23 +1436,24 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
             res[key] = op_res[key]
 
         # Create function for computing solved algebraics
-        explicit_solved_expr = []
-        for (i, sol_alg) in self._explicit_solved_algebraics:
-            res[sol_alg.name] = []
-            explicit_solved_expr.append(self._solved_expr[i])
-        alg_sol_f = casadi.MXFunction(self._known_vars + self._explicit_unsolved_vars, explicit_solved_expr)
-        alg_sol_f.init()
-        if op_res.solver.expand_to_sx != "no":
-            alg_sol_f = casadi.SXFunction(alg_sol_f)
+        if len(self._explicit_solved_algebraics) > 0:
+            explicit_solved_expr = []
+            for (i, sol_alg) in self._explicit_solved_algebraics:
+                res[sol_alg.name] = []
+                explicit_solved_expr.append(self._solved_expr[i])
+            alg_sol_f = casadi.MXFunction(self._known_vars + self._explicit_unsolved_vars, explicit_solved_expr)
             alg_sol_f.init()
+            if op_res.solver.expand_to_sx != "no":
+                alg_sol_f = casadi.SXFunction(alg_sol_f)
+                alg_sol_f.init()
 
-        # Compute solved algebraics
-        for k in xrange(len(res['time'])):
-            for (i, var) in enumerate(self._known_vars + self._explicit_unsolved_vars):
-                alg_sol_f.setInput(res[var.getName()][k], i)
-            alg_sol_f.evaluate()
-            for (i, sol_alg) in enumerate(self._explicit_solved_algebraics):
-                res[sol_alg[1].name].append(alg_sol_f.getOutput(i).toArray().reshape(-1))
+            # Compute solved algebraics
+            for k in xrange(len(res['time'])):
+                for (i, var) in enumerate(self._known_vars + self._explicit_unsolved_vars):
+                    alg_sol_f.setInput(res[var.getName()][k], i)
+                alg_sol_f.evaluate()
+                for (i, sol_alg) in enumerate(self._explicit_solved_algebraics):
+                    res[sol_alg[1].name].append(alg_sol_f.getOutput(i).toArray().reshape(-1))
 
         # Add results for all alias variables (only needed for solved algebraics) and convert to array
         for var in self._model.getAllVariables():

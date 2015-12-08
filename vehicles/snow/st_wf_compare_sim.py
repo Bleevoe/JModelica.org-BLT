@@ -9,7 +9,7 @@ from pyjmi.common.core import TrajectoryLinearInterpolation
 import numpy as np
 
 import sys
-sys.path.append('..')
+sys.path.append('../..')
 import symbolic_processing as sp
 from simulation import *
 
@@ -29,13 +29,13 @@ caus_opts = sp.CausalizationOptions()
 caus_opts['dense_tol'] = 1e10
 caus_opts['inline_solved'] = True
 
-sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
-#~ sim_res = ResultDymolaTextual("opt_asphalt.txt")
+#~ sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
+sim_res = ResultDymolaTextual("opt_result.txt")
 start_time = 0.
 final_time = sim_res.get_variable_data('time').t[-1]
 ncp = 100
 class_name = "Car"
-file_paths = os.path.join(get_files_path(), "vehicle_turn.mop")
+file_paths = "turn.mop"
 opts = {'generate_html_diagnostics': True, 'state_initial_equations': True}
 model = transfer_model(class_name, file_paths, compiler_options=opts)
 init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
@@ -79,8 +79,7 @@ state_names = [
  'psi',
  'vy',
  'vx',
- #~ 'dpsi',
- #~ 'r',
+ 'r',
  'alphaf',
  'alphar',
  'omegaf',
@@ -98,21 +97,14 @@ names = [var.getName() for var in variables if not var.isAlias()] # Remove alias
 init_cond = dict([(name, init_fmu.get(name)[0]) for name in names])
 
 # Simulate and plot
-ref_tol = 1e-14
-dae_tol = 1e-7
+ref_tol = 5e-9
+dae_tol = 4e-8
 sup_tol = 1e-8
-par_blt_tol = 1e-7
-par_sup_tol = 1e-8
+par_blt_tol = 4e-8
+par_sup_tol = 1.2e-8
 blt_tol = 1e-8
-
-#~ ref_tol = 1e-10
-#~ dae_tol = 1e-8
-#~ sup_tol = 1e-8
-#~ par_blt_tol = 1e-8
-#~ par_sup_tol = 1e-8
-#~ blt_tol = 2e-8
 res_ref = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx,
-                   tol=ref_tol, solver="Radau5DAE")
+                   tol=ref_tol)#, solver="Radau5DAE")
 res_dae = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx,
                    tol=dae_tol)
 res_sup = simulate(model, init_cond, start_time, final_time, input, ncp, False, caus_opts, expand_to_sx,

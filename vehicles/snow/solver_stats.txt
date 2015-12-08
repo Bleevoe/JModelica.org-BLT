@@ -1,0 +1,4 @@
+return status, number of iterations, final objective value, execution time 
+(0: opt found, -1: max iter, -2: rest fail) 
+
+Phase 1:   ('Maximum_Iterations_Exceeded', 0, 11.021795, 1.233801)

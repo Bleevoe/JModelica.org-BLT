@@ -15,6 +15,7 @@
 \usepackage{lipsum}
 \usepackage{epstopdf}
 \usepackage{bm}
+\newcommand{\cond}{\mathbf{cond}}
 
 \newcommand\gsout{\bgroup\markoverwith
 {\textcolor{green}{\rule[3.1pt]{2pt}{1pt}}}\ULon}
@@ -28,7 +29,7 @@
 
 % Title page
 \title{Implicit vs. explicit ODE}
-\author{Fredrik Magnusson\inst{1} \and Karl Berntorp\inst{2} \\ Christan \& Claus?}
+\author{Fredrik Magnusson\inst{1} \and Karl Berntorp\inst{2}}
 \institute
 {
 \inst{1} Department of Automatic Control \\
@@ -39,7 +40,7 @@ Cambridge, MA \\
 \vspace{14pt}
 \insertdate
 }
-\date{October 15, 2015}
+\date{November 11, 2015}
 
 
 % Slide numbering
@@ -65,15 +66,9 @@ Cambridge, MA \\
 Last time:
 \begin{itemize}
 \item
-Compared simulation results for implicit DAE and explicit ODE with IDA and Radau5
+Problem behaves like high-index problem (sup. alg.)
 \item
-Implicit DAE formulation needs 10-20 times more steps
-\item
-Suppressing algebraic variables behaves very similarly to explicit ODE
-\item
-Pacejka Magic Formula (algebraic equation) stiff
-\item
-Surprisingly large relative errors with ODE formulation
+Maybe Pacejka's Magic formula is almost high index?
 \end{itemize}
 \end{frame}
 
@@ -82,21 +77,22 @@ Surprisingly large relative errors with ODE formulation
 This time:
 \begin{itemize}
 \item
-Revisit the error comparisons
+Revisit simulation results, looking at order and step length
+\item
+Discuss ``almost high index''
+\begin{itemize}
+\item
+Results indicate that Magic formula is harmless
+\item
+Results indicate that problem is not almost high index
+\end{itemize}
+\end{itemize}
+If time permits:
+\begin{itemize}
 \item
 Discuss optimization formulation and solution procedure
 \item
 Discuss if the observed simulation phenomena regarding DAE vs. ODE are related to optimization
-\end{itemize}
-\end{frame}
-
-\begin{frame}
-\frametitle{Partial DAE}
-\begin{itemize}
-\item
-Last time considered eliminating all algebraics except the 4 nominal forces (Magic formula)
-\item
-I tested this as well, and call it DAE par.
 \end{itemize}
 \end{frame}
 
@@ -107,15 +103,16 @@ Radau5 tolerance chosen to get reference solution, the rest to get similar accur
 {\small
 \begin{table}
 \centering
-\begin{tabular}{lccccc}
+\begin{tabular}{lccc}
 \toprule
-Setup & tol & Time [s] & Steps [1000] & Evals [1000] & Order \\
+Setup & tol & Time [s] & Steps [1000] \\
 \midrule
-Radau5 DAE & 1e-12 & 69 & 17 & 640 & 5 \\
-IDA DAE & 1e-6 & 59 & 26 & 930 & 4 \\
-IDA DAE sup. alg. & 1e-8 & 2.8 & 2.9 & 42 & 3 \\
-IDA DAE par. & 1e-6 & 6.3 & 8 & 102 & 5 \\
-IDA ODE & 1e-8 & 0.9 & 3.4 & 15 & 3 \\
+Radau5 DAE & 1e-12 & 69 & 17 \\
+IDA DAE & 1e-6 & 59 & 26 \\
+IDA DAE sup. alg. & 1e-8 & 2.8 & 2.9 \\
+IDA DAE par. & 1e-6 & 6.3 & 8 \\
+IDA DAE par. sup. & 1e-8 & 1.6 & 3.2 \\
+IDA ODE & 1e-8 & 0.9 & 3.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -220,6 +217,31 @@ Solver options:
 \end{frame}
 
 \begin{frame}[fragile]
+\frametitle{IDA DAE par. sup.}
+{\small
+\begin{verbatim}
+Final Run Statistics: --- 
+
+ Number of steps                                 : 3240
+ Number of function evaluations                  : 7617
+ Number of Jacobian evaluations                  : 1120
+ Number of function eval. due to Jacobian eval.  : 15680
+ Number of error test failures                   : 476
+ Number of nonlinear iterations                  : 7617
+ Number of nonlinear convergence failures        : 0
+
+Solver options:
+
+ Solver                       : IDA (BDF)
+ Maximal order                : 5
+ Suppressed algebr. variables : True
+ Tolerances (absolute)        : 1e-08
+ Tolerances (relative)        : 1e-08
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}[fragile]
 \frametitle{IDA ODE}
 {\small
 \begin{verbatim}
@@ -244,36 +266,205 @@ Solver options:
 }
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{Error}
-\begin{itemize}
-\item
-Reference solution $v$ from Radau5 with \verb|ATOL=RTOL=1e-12|
-\item
-Compare with the various IDA solutions $\hat v$, all with \verb|ATOL=RTOL=1e-6|
-\item
-Compute relative error as function of time for each variable kind:
-\[e_v(t) = \left|\left|\frac{v(t) - \hat v(t)}{v(t) + \epsilon_{\text{mach}}}\right|\right|_\infty, \quad \forall v \in \{\dot x, x, y\}\]
-\end{itemize}
-\end{frame}
-
 \begin{frame}
-\frametitle{Variable kind errors}
+\frametitle{Steps DAE}
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.9\linewidth]{errors.png}
+\includegraphics[width=\linewidth]{steps_dae.pdf}
 \end{figure}
 \end{frame}
 
 \begin{frame}
-\frametitle{Variable kind errors}
+\frametitle{Steps ODE}
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{steps_ode.pdf}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Index}
 \begin{itemize}
 \item
-Is uniformly distributed communication points sensible?
+Key seems to be to deactivate error control for (some) algebraics
 \item
-Is constant order reasonable?
+Old conjecture: The problem is almost high index
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Almost high index}
+This is my understanding of almost high index:
+\begin{align}
+\dot x &= x + y \\
+y &= ax
+\end{align}
+This is index 1 for all $\alpha \in \mathbb{R}$, but as $a \rightarrow \infty$, it becomes index 2.
+\end{frame}
+
+\begin{frame}
+\frametitle{Almost high index}
+\begin{itemize}
 \item
-Can we conclude that ODE formulation is superior for simulation for this case? Can we figure out why?
+The change of variables $z = ax$ yields
+\begin{align}
+\dot z &= z + ay \\
+y &= z
+\end{align}
+which is index 1 even as $\alpha \rightarrow \infty$
+\item
+So is ``almost high index'' just a result of poor scaling?
+\item
+Also, it seems like transforming an almost high index DAE to an ODE will just result in a very stiff ODE
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Magic formula}
+	\begin{align}
+		F^x_{0} &= \mu_x F^z 
+		\sin\Big( C_{x} 
+		\arctan\big(B_{x} \lambda_i -E_{x}(B_{x}\lambda-\arctan B_{x}\lambda)\big)\Big)
+	\end{align}
+	\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\linewidth]{magic_formula.pdf}
+	\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Magic formula}
+During simulation, $\lambda$ stays below 0.05
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.67\linewidth]{force_grad.png}
+\end{figure}
+Almost linear, with very high eigenvalues (can be remedied by variable scaling)
+\end{frame}
+
+\begin{frame}
+\frametitle{Magic formula}
+Changes in gradient not cause of trouble:
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{force_grad_steps.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Measuring index}
+\begin{itemize}
+\item
+How to measure distance to index 2? Two ideas:
+\begin{itemize}
+\item
+Compute condition number of iteration matrix in discretization method and see how it varies with $h$
+\item
+Analyze singular values of Jacobian of derivative array equations
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Iteration matrix condition number}
+Consider
+\begin{align*}
+F(\dot x, x, y) &= 0 \\
+G(x, y) &= 0
+\end{align*}
+\begin{itemize}
+\item
+BDF iteration matrix:
+\begin{equation}
+J = \begin{bmatrix}
+\frac{\alpha_0}{h} \nabla_{\dot x}F + \nabla_x F & \nabla_y F \\
+\nabla_x G & \nabla_y G
+\end{bmatrix}
+\end{equation}
+\item
+(Theorem 5.4.1) Condition number of iteration matrix is $\mathcal{O}(h^{-\nu})$
+\item
+Conjecture: If $\nabla_{\dot x}F = I$ and first row of $J$ is scaled by $h$, condition number is instead $\mathcal{O}(h^{-\nu-1})$
+\begin{itemize}
+\item
+What to do if $\nabla_{\dot x}F$ is not square? What does IDA do?
+\item
+Maybe I should do something like this in my collocation implementation?
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Theorem and conjecture verification}
+\begin{table}
+\centering
+\begin{tabular}{ll}
+A: original problem & B: variable scaling \\
+C: $a = \infty$ & s: conjecture scaling
+\end{tabular}
+\end{table}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.85\linewidth]{cond_test.pdf}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Condition number $t = 0$}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{cond_0.pdf}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Condition number $t = 6.21$}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\linewidth]{cond_621.pdf}
+\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+\frametitle{Derivative array equations}
+Consider $F(x, \dot x) = 0$
+\begin{itemize}
+\item
+Derivative array equations
+\begin{align}
+\bm F(x, \dot x, \ddot x) = \begin{bmatrix}
+F(x, \dot x)\\
+\frac{\mathrm{d}}{\mathrm{d}t} F(x, \dot x)
+\end{bmatrix} = 0
+\end{align}
+\item
+Proposition 2.5.1: Index is 1 if
+$\displaystyle\frac{\partial \bm F(x, \dot x, \ddot x)}{\partial [\dot x, \ddot x]}$ is 1-full w.r.t. $\dot x$ and has constant rank
+\item
+Measure: $\displaystyle \frac{\sigma_1}{\sigma_k},$ where $\sigma_k$ is smallest singular value whose singular vector involves $\dot x$
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Derivative array equations}
+Problems with this measure:
+\begin{itemize}
+\item
+Depends on problem scaling (good or bad?)
+\item
+Requires $\ddot x$ (could be obtained by adding states? might interfere?)
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Next steps}
+\begin{itemize}
+\item
+How to proceed?
+\item
+Claus mentioned stability issues before...
 \end{itemize}
 \end{frame}
 
@@ -281,7 +472,7 @@ Can we conclude that ODE formulation is superior for simulation for this case? C
 \frametitle{Commutativity}
 \begin{itemize}
 \item
-Last time: Does BLT and fixed-step collocation commute?
+Previously: Does BLT and fixed-step collocation commute?
 \item
 Consider single integration step of
 \begin{equation}
@@ -448,7 +639,7 @@ Inherently ill-conditioned (see bonus slides)
 \frametitle{Restoration phase}
 \begin{itemize}
 \item
-For the high-level problem (if memory serves; to be confirmed by Karl), convergence is hampered by endless restoration
+For the high-level problem, IPOPT fails in restoration
 \item
 Restoration is triggered for various reasons, but usually because of ill-conditioned Jacobian
 \item
@@ -462,7 +653,7 @@ Restoration means that IPOPT stops solving the optimization problem and instead 
     \end{alignat*}
 \end{subequations}
 \item
-Failure to do this means that IPOPT can not even find a feasible point
+IPOPT finds a local minimum to this problem which is not feasible; failure
 \end{itemize}
 \end{frame}
 

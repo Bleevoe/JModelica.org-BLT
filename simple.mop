@@ -1,23 +1,23 @@
 model Simple
-    Real x(start=1, fixed=true);
-    Real y_L;
+    Real a(start=1, fixed=true);
+    Real x;
+    Real y;
+    Real z;
 equation
-    der(x) = -x ;
-    der(x) = -x + y_L - 1;
+    der(a) = -x -y -z + 2;
+    sqrt(x) + y + sqrt(z) = sqrt(a)+2;
+    sqrt(x) + sqrt(y) = sqrt(a)+1;
+    x + sqrt(z) = a+1;
 end Simple;
 
 model Simple_2
     Real x(start=1, fixed=true);
     Real y;
     Real z;
-    Real a;
-    input Real u;
-    parameter Real p = 2;
 equation
-    der(x) = x - p*y + u;
-    y + z     = x;
-        z + a = x;
-    y - z + a = x;
+    der(x) = x + 2*y + 3*z;
+    x + y + z + 1 = 0;
+    2*x + y + z = 0;
 end Simple_2;
 
 optimization Simple_Opt(objectiveIntegrand=x^2, finalTime=10)

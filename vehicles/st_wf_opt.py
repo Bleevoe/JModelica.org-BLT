@@ -41,7 +41,8 @@ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
 opt_opts['IPOPT_options']['tol'] = 1e-9
 opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
 opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = -1
-opt_opts['n_e'] = 15
+opt_opts['IPOPT_options']['max_iter'] = 200
+opt_opts['n_e'] = 37
 
 # Set blocking factors
 factors = {'delta_u': opt_opts['n_e'] / 2 * [2],

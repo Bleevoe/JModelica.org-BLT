@@ -14,3 +14,12 @@
 *.synctex.gz
 *.toc
 *.vrb
+HeatRecoveryOptim.mop
+OCTTutorial
+OfflineOptimSolution.py
+hrsg
+hrsg_guess.txt
+siem_ccpp.mop
+siem_ccpp_init.txt
+test_siem_ccpp.py
+
