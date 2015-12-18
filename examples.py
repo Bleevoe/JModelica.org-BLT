@@ -13,7 +13,7 @@ from pyjmi.common.core import TrajectoryLinearInterpolation
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4"][0]
+    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4"][4]
     source = ["Modelica", "strings"][0]
     
     blt = True
@@ -33,10 +33,11 @@ if __name__ == "__main__":
     #~ caus_opts['inline_solved'] = True
 
     if problem == "simple":
-        caus_opts['tearing'] = True
-        caus_opts['tear_vars'] = ['z']
+        #~ caus_opts['tearing'] = True
+        #~ caus_opts['tear_vars'] = ['z']
+        #~ caus_opts['tear_res'] = [2]
         start_time = 0.
-        final_time = 10.
+        final_time = 2.
         input = lambda t: []
         ncp = 500
         if source == "strings":
@@ -47,7 +48,8 @@ if __name__ == "__main__":
             class_name = "Simple"
             file_paths = "simple.mop"
             #~ opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True, 'index_reduction': False,
-					#~ 'equation_sorting': False, 'automatic_add_initial_equations': False}
+                    #~ 'equation_sorting': False, 'automatic_add_initial_equations': False}
+            #~ opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True, 'inline_functions': 'none'}
             opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True}
             model = transfer_model(class_name, file_paths, compiler_options=opts)
             init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
@@ -120,6 +122,23 @@ if __name__ == "__main__":
         init_fmu.set('Y0', Y_start)
         init_fmu.set('psi0', psi_start)
         init_fmu.set('vx0', vx_start)
+    if problem == "double_pendulum":
+        if source != "Modelica":
+            raise ValueError
+        class_name = "DoublePendulum"
+        file_path = "double_pendulum.mop"
+        #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'index_reduction': True, 'automatic_add_initial_equations': True}
+        opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'inline_functions': 'all'}
+        #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False}
+        #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
+        init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:fmu_log.txt'))
+        #~ model = transfer_model(class_name, file_path, compiler_options=opts)
+        opts['generate_html_diagnostics'] = False
+        model = transfer_model("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:ci_log.txt')
+
+        start_time = 0.
+        final_time = 10.
+        ncp = 500
     if problem == "ccpp":
         #~ caus_opts['uneliminable'] = ['der(plant.evaporator.alpha)']
         #~ caus_opts['uneliminable'] = ['plant.sigma', 'der(plant.evaporator.alpha)']
@@ -135,19 +154,6 @@ if __name__ == "__main__":
         opts = {'generate_html_diagnostics': True}
         model = transfer_model(class_name, file_paths, compiler_options=opts)
         init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
-    if problem == "double_pendulum":
-        if source != "Modelica":
-            raise ValueError
-        class_name = "DoublePendulum"
-        file_path = "double_pendulum.mop"
-        opts = {'generate_html_diagnostics': True, 'dynamic_states': True, 'index_reduction': True, 'automatic_add_initial_equations': True}
-        #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
-        init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts))
-        model = transfer_model(class_name, file_path, compiler_options=opts)
-
-        start_time = 0.
-        final_time = 10.
-        ncp = 500
     if problem == "hrsg":
         #~ caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
         if source != "Modelica":
@@ -161,7 +167,7 @@ if __name__ == "__main__":
         init_res = ResultDymolaTextual('hrsg_guess.txt')
         inputs = ['uFP_der_ext', 'uSH_der_ext', 'uRH_der_ext']
         input_trajs = [TrajectoryLinearInterpolation(init_res.get_variable_data(name).t,
-													 init_res.get_variable_data(name).x.reshape(-1, 1)) for name in inputs]
+                                                     init_res.get_variable_data(name).x.reshape(-1, 1)) for name in inputs]
         input = lambda t: [traj.eval(t)[0, 0] for traj in input_trajs]
         start_time = 400.
         final_time = 5400.
@@ -208,7 +214,27 @@ if __name__ == "__main__":
         var_kinds = [model.DIFFERENTIATED, model.DERIVATIVE, model.REAL_ALGEBRAIC]
         variables = list(itertools.chain.from_iterable([model.getVariables(vk) for vk in var_kinds]))
         names = [var.getName() for var in variables if not var.isAlias()] # Remove alias
-        init_cond = dict([(name, init_fmu.get(name)[0]) for name in names])
+
+        # Replace dummy derivatives
+        fmu_names = names
+        #~ fmu_names = []
+        #~ for name in names:
+            #~ if name == 'revolute1._der_der_phi':
+                #~ fmu_names.append("der(revolute1.w)")
+            #~ elif name == 'damper._der_der_phi_rel':
+                #~ fmu_names.append("der(damper.w_rel)")
+            #~ elif name == 'boxBody2._der_der_r_0[1]':
+                #~ fmu_names.append("der(boxBody2.v_0[1])")
+            #~ elif name == 'boxBody2._der_der_r_0[2]':
+                #~ fmu_names.append("der(boxBody2.v_0[2])")
+            #~ elif name == 'revolute2._der_der_phi':
+                #~ fmu_names.append("der(revolute2.w)")
+            #~ elif "_der_" in name:
+                #~ fmu_names.append("der(" + name.replace('_der_', '') + ")")
+            #~ else:
+                #~ fmu_names.append(name)
+        
+        init_cond = dict([(name, init_fmu.get(fmu_name)[0]) for (name, fmu_name) in zip(names, fmu_names)])
     elif source == "strings":
         if problem == "Simple":
             init_cond = {'der(x)': -1, 'x': 1, 'y': -2}
@@ -220,19 +246,21 @@ if __name__ == "__main__":
     res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, tol=1e-8)
     if problem == "simple":
         t = res['time']
-        a = res['a']
+        #~ a = res['a']
         x = res['x']
-        y = res['y']
-        z = res['z']
+        #~ y = res['y']
+        #~ z = res['z']
 
         if with_plots:
             plt.close(101)
             plt.figure(101)
-            plt.plot(t, a)
+            #~ plt.plot(t, a)
             plt.plot(t, x)
-            plt.plot(t, y)
-            plt.plot(t, z)
-            plt.legend(['a', 'x', 'y', 'z'])
+            #~ plt.plot(t, y)
+            #~ plt.plot(t, z)
+            #~ plt.legend(['a', 'x', 'y', 'z'])
+            #~ plt.legend(['x', 'y'])
+            plt.legend(['x'])
             plt.show()
     elif problem == "circuit":
         t = res['time']

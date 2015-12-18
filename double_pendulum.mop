@@ -1,4 +1,7 @@
 optimization DoublePendulum
-    extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum;
+	parameter Real phi_max = 20;
+	extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum;
+    //extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum(
+	//		revolute1.phi(min=-phi_max, max=phi_max), revolute2.phi(min=-phi_max, max=phi_max));
 end DoublePendulum;
 

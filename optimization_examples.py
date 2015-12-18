@@ -15,19 +15,20 @@ import time
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4"][6]
+    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4"][4]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
     with_opt = True
     #~ with_opt = False
     blt = True
-    blt = False
+    #~ blt = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
-    #~ caus_opts['draw_blt'] = True
-    caus_opts['solve_blocks'] = True
-    #~ caus_opts['dense_tol'] = 4
+    caus_opts['draw_blt'] = True
+    caus_opts['blt_strings'] = False
+    #~ caus_opts['solve_blocks'] = True
+    caus_opts['dense_tol'] = 1000
     #~ caus_opts['blt_strings'] = False
     #~ caus_opts['dense_tol'] = 10
     #~ caus_opts['ad_hoc_scale'] = True
@@ -115,12 +116,43 @@ if __name__ == "__main__":
         opt_opts['init_traj'] = sim_res
     if problem == "double_pendulum":
         uneliminable = []
+        
+        caus_opts['tear_vars'] = ['der(boxBody1.body.w_a[3])', 'der(boxBody2.body.w_a[3])']
+        caus_opts['tear_res'] = [50, 90]
+        caus_opts['tearing'] = True
+        time_horizon = 5
+        
         if source != "Modelica":
             raise ValueError
         class_name = "DoublePendulum"
         file_path = "double_pendulum.mop"
-        opts = {'generate_html_diagnostics': True}
-        op = transfer_optimization_problem(class_name, file_path)
+        opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False}
+        msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
+        fmu = load_fmu(compile_fmu(msl_pendulum, compiler_options=opts))
+        init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
+        
+        #~ init_op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
+        #~ init_op.set('finalTime', time_horizon)
+        
+        #~ opt_opts = init_op.optimize_options()
+        #~ opt_opts['init_traj'] = init_res
+        #~ opt_opts['nominal_traj'] = init_res
+        #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
+        #~ opt_opts['n_e'] = 350
+        #~ if blt:
+            #~ init_op = sp.BLTOptimizationProblem(init_op, caus_opts)
+        #~ init_res = init_op.optimize(options=opt_opts)
+        
+        op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
+        op.set('finalTime', time_horizon)
+        opt_opts = op.optimize_options()
+        opt_opts['init_traj'] = init_res
+        opt_opts['nominal_traj'] = init_res
+        opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
+        #~ opt_opts['n_e'] = 356
+        opt_opts['n_e'] = 200
     if problem == "ccpp":
         #~ caus_opts['analyze_var'] = 'der(plant.evaporator.alpha)'
         caus_opts['uneliminable'] = ['plant.sigma']
@@ -319,6 +351,44 @@ if __name__ == "__main__":
                 plt.plot(time, Twr * 1e-3, drawstyle='steps-post')
                 plt.xlabel('time [s]')
                 plt.legend(['delta [deg]', 'Twf [kN]', 'Twr [kN]'], loc=4)
+                plt.show()
+        elif problem == "double_pendulum":
+            init_time = init_res['time']
+            init_phi1 = init_res['revolute1.phi']
+            init_phi2 = init_res['revolute2.phi']
+            init_r1 = init_res['boxBody1.r[1]'][0]
+            init_r2 = init_res['boxBody2.r[1]'][0]
+            init_x1 = init_r1*cos(init_phi1)
+            init_y1 = init_r1*sin(init_phi1)
+            init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
+            init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
+            time = res['time']
+            phi1 = res['revolute1.phi']
+            phi2 = res['revolute2.phi']
+            r1 = res['boxBody1.r[1]'][0]
+            r2 = res['boxBody2.r[1]'][0]
+            x1 = r1*cos(phi1)
+            y1 = r1*sin(phi1)
+            x2 = x1 + r2*cos(phi1 + phi2)
+            y2 = y1 + r2*sin(phi1 + phi2)
+            if with_plots:
+                # Plot road
+                plt.close(1)
+                plt.figure(1)
+                plt.plot(init_x1, init_y1, 'b--')
+                plt.plot(init_x2, init_y2, 'r--')
+                plt.plot(x1, y1, 'b')
+                plt.plot(x2, y2, 'r')
+                plt.legend(['Tip 1 sim', 'Tip 2 sim', 'Tip 1 opt', 'Tip 2 opt'])
+
+                plt.close(2)
+                plt.figure(2)
+                plt.plot(init_time, init_phi1, 'b--')
+                plt.plot(init_time, init_phi2, 'r--')
+                plt.plot(time, phi1, 'b')
+                plt.plot(time, phi2, 'r')
+                plt.legend(['$\phi_1$ sim', '$\phi_2$ sim', '$\phi_1$ opt', '$\phi_2$ opt'])
+                
                 plt.show()
         elif problem == "ccpp":
             init_sim_plant_p = res['plant.evaporator.p']
