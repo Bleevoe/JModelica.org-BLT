@@ -39,6 +39,12 @@ class CausalizationOptions(dict):
 
             Default: False
 
+        solve_torn_linear_blocks --
+            Whether to solve causalized equations in torn blocks, rather than doing forward substitution as for
+            nonlinear blocks.
+
+            Default: False
+
         tearing --
             Whether to tear algebraic loops. Only applicable if solve_blocks is True.
 
@@ -93,6 +99,7 @@ class CausalizationOptions(dict):
         self['draw_blt'] = False
         self['blt_strings'] = True
         self['solve_blocks'] = False
+        self['solve_torn_linear_blocks'] = False
         self['tearing'] = False
         self['tear_vars'] = []
         self['tear_res'] = []
@@ -149,7 +156,7 @@ class NonBool(object):
         pass
 
     def __nonzero__(self):
-        raise RuntimeError
+        raise RuntimeError("BUG: Undefined Boolean value")
 
 class Variable(object):
 
@@ -233,9 +240,9 @@ class Component(object):
 
         # Check equation properties
         self.solvable = self._is_solvable()
-        self.linear = self._is_linear(edges)
         self.torn = self._is_torn()
-        self.sparsity_preserving = None
+        self.linear = self._is_linear(edges)
+        self.sparsity_preserving = NonBool()
 
     def _is_solvable(self):
         """
@@ -256,7 +263,7 @@ class Component(object):
         """
         Check if unknowns can be solved for linearly in component.
 
-        Solvability is considered to be equivalent to linear dependence of
+        Solvability in this method is considered to be equivalent to linear dependence of
         all unknowns.
         """
         # Check if block is linear
@@ -278,6 +285,8 @@ class Component(object):
                             found_edges += 1
                     if found_edges != 1:
                         dh()
+        if not self.options['solve_torn_linear_blocks'] and self.torn:
+            return False
         return is_linear
 
     def _is_torn(self):
@@ -287,20 +296,20 @@ class Component(object):
         if self.options['solve_blocks']:
             self.block_tear_vars = []
             self.block_tear_res = []
-            self.causal_vars = []
-            self.causal_equations = []
+            self.block_causal_vars = []
+            self.block_causal_equations = []
             if not self.options['tearing']:
                 return False
             for var in self.variables:
                 if var.name in self.tear_vars:
                     self.block_tear_vars.append(var)
                 else:
-                    self.causal_vars.append(var)
+                    self.block_causal_vars.append(var)
             for eq in self.equations:
                 if eq.global_index in self.tear_res:
                     self.block_tear_res.append(eq)
                 else:
-                    self.causal_equations.append(eq)
+                    self.block_causal_equations.append(eq)
             if len(self.block_tear_vars) != len(self.block_tear_res):
                 self.debug_tearing()
                 raise RuntimeError("Number of tearing variables does not match number of residuals for block. " +
@@ -320,13 +329,13 @@ class Component(object):
         Print block equations and variables and choice of tearing variables and residuals.
         """
         print("Chosen causal variables: \n")
-        for var in self.causal_vars:
+        for var in self.block_causal_vars:
             print("\t%s" % var.name)
         print("\nChosen tearing variables: \n")
         for var in self.block_tear_vars:
             print("\t%s" % var.name)
         print("\nChosen causal equations (ID: expression): \n")
-        for eq in self.causal_equations:
+        for eq in self.block_causal_equations:
             print("\t%d: %s" % (eq.global_index, eq.string))
         print("\nChosen tearing residuals: \n")
         for eq in self.block_tear_res:
@@ -373,7 +382,7 @@ class Component(object):
         self.A_sym = A
         self.b_sym = rhs
 
-    def create_torn_lin_eq(self, known_vars, solved_vars, matches, global_index):
+    def create_torn_lin_eq(self, known_vars, solved_vars, global_index):
         """
         Create linear equation system for block using tearing and Schur complement.
 
@@ -388,40 +397,24 @@ class Component(object):
         if not self.solvable or not self.linear or not self.torn:
             raise RuntimeError("Can only create torn linear equation system for solvable, linear, torn blocks.")
         res = casadi.vertcat(self.eq_expr)
-        all_vars = self.mx_vars + known_vars + solved_vars 
+        all_vars = self.mx_vars + known_vars + solved_vars
 
         # Sort causal and tearing equations
-        causal_equations = []
-        causal_variables = []
-        tearing_equations = []
-        self.tearing_variables = tearing_variables = []
-        tearing_index = self.n - len(self.block_tear_vars)
-        for vertex in self.vertices:
-            if vertex.variable in self.block_tear_vars:
-                vertex.equation.global_blt_index = global_index + tearing_index
-                vertex.variable.global_blt_index = global_index + tearing_index
-                vertex.equation.local_blt_index = tearing_index
-                vertex.variable.local_blt_index = tearing_index
-                tearing_equations.append(vertex.equation)
-                tearing_variables.append(vertex.variable)
-                tearing_index += 1
-            else:
-                causal_equations.append(vertex.equation)
-                causal_variables.append(vertex.variable)
-        
-        #~ # Create new block variables and equations
-        #~ causal_block_equations = []
-        #~ causal_block_variables = []
-        #~ i = 0
-        #~ for (eq, var) in itertools.izip(causal_equations, causal_variables):
-            #~ causal_block_equations.append(Equation(eq.string, eq.global_index, i, eq.expression))
-            #~ causal_block_variables.append(Variable(var.name, var.global_index, i, var.is_der, var.mvar, var.mx_var))
-            #~ i += 1
-#~ 
-        #~ # Create new bipartite graph for block
-        #~ causal_block_edges = create_edges(causal_block_equations, causal_block_variables)
-        #~ causal_block_graph = BipartiteGraph(causal_block_equations, causal_block_variables,
-                                            #~ causal_block_edges, [], CausalizationOptions())
+        tearing_variables = self.block_tear_vars
+        tearing_equations = self.block_tear_res
+        causal_variables = [var for var in self.variables if not var in tearing_variables]
+        causal_equations = [eq for eq in self.equations if not eq in tearing_equations]
+        tearing_index = self.n - len(tearing_variables)
+        for var in tearing_variables:
+            var.global_blt_index = global_index + tearing_index
+            var.local_blt_index = tearing_index
+            tearing_index += 1
+        tearing_index = self.n - len(tearing_equations)
+        for eq in tearing_equations:
+            eq.global_blt_index = global_index + tearing_index
+            eq.local_blt_index = tearing_index
+            tearing_index += 1
+
         # Update component indices
         i = 0
         for (eq, var) in itertools.izip(causal_equations, causal_variables):
@@ -432,23 +425,17 @@ class Component(object):
             eq.global_blt_index = None
             var.global_blt_index = None
             i += 1
-#~ 
-        #~ # Create new bipartite graph for block
-        #~ causal_block_edges = create_edges(causal_block_equations, causal_block_variables)
-        #~ causal_block_graph = BipartiteGraph(causal_block_equations, causal_block_variables,
-                                            #~ causal_block_edges, [], CausalizationOptions())
 
         # Create new bipartite graph for block
         causal_edges = create_edges(causal_equations, causal_variables)
         causal_graph = BipartiteGraph(causal_equations, causal_variables, causal_edges, [], [], CausalizationOptions())
 
         # Compute components and verify scalarity
-        #~ causal_graph.inherit_matching(matches)
         causal_graph.maximum_match()
         causal_graph.scc(global_index)
         if causal_graph.n != len(causal_graph.components):
             raise RuntimeError("Causalized equations in block involving tearing variables " +
-                               str(self.tear_vars) + " are not causal." +
+                               str(self.tear_vars) + " are not causal. " +
                                "Additional tearing variables needed.")
 
         # Compose component equations and variables
@@ -670,24 +657,44 @@ class BipartiteGraph(object):
                 i -= offset
                 i_new += offset
                 lw = 2
+                # Colors: https://css-tricks.com/snippets/css/named-colors-and-hex-equivalents/
                 if component.solvable:
                     if component.linear:
                         if component.sparsity_preserving:
                             if component.torn:
-                                color = 'm'
+                                color = 'SpringGreen'
                                 if hasattr(component, 'fcn'):
                                     ls = '--'
                                     n_torn = len(component.block_tear_vars)
                                     plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
                                     plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
                             else:
-                                color = 'g'
+                                color = 'Green'
                         else:
-                            color = 'c'
+                            color = 'Indigo'
                     else:
-                        color = 'r'
+                        if component.torn:
+                            color = 'Tomato'
+                            if hasattr(component, 'tear_mx_vars'):
+                                ls = '--'
+                                n_torn = len(component.block_tear_vars)
+                                plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
+                                plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
+                            else:
+                                RuntimeError("BUG?")
+                            for (j, causal_co) in enumerate(component.causal_graph.components):
+                                if causal_co.sparsity_preserving:
+                                    causal_color = 'Green'
+                                else:
+                                    causal_color = 'Indigo'
+                                plt.plot([i+j, i+j+1], [-i-j, -i-j], causal_color, lw=lw)
+                                plt.plot([i+j, i+j], [-i-j, -i-j-1], causal_color, lw=lw)
+                                plt.plot([i+j, i+j+1], [-i-j-1, -i-j-1], causal_color, lw=lw)
+                                plt.plot([i+j+1, i+j+1], [-i-j, -i-j-1], causal_color, lw=lw)
+                        else:
+                            color = 'Red'
                 else:
-                    color = 'y'
+                    color = 'Yellow'
                 plt.plot([i, i_new], [-i, -i], color, lw=lw)
                 plt.plot([i, i], [-i, -i_new], color, lw=lw)
                 plt.plot([i, i_new], [-i_new, -i_new], color, lw=lw)
@@ -991,8 +998,8 @@ class BLTModel(object):
         self._setup_dependencies()
         self._create_residuals()
         self._print_statistics()
-        #~ if self.options['closed_form']:
-            #~ dh()
+        if self.options['closed_form']:
+            dh()
 
     def __getattr__(self, name):
         """
@@ -1146,7 +1153,7 @@ class BLTModel(object):
             if co.solvable and co.linear and self._sparsity_preserving(co):
                 n_solvable += co.n
                 if co.torn:
-                    co.create_torn_lin_eq(known_vars, solved_vars, self._graph.matches, global_index)
+                    co.create_torn_lin_eq(known_vars, solved_vars, global_index)
 
                     # Compute equation system components
                     # Block variables need a (any) real value in order to find right-hand sides
@@ -1186,10 +1193,17 @@ class BLTModel(object):
 
                     # Solve component equations using Schur complement
                     I = np.eye(A.shape[0])
-                    Ainv = casadi.solve(A, I, options['linear_solver']) # TODO: Is it better to solve twice instead?
+                    if options['closed_form']:
+                        Ainv = casadi.solve(A, I) # TODO: Is it better to solve twice instead?
+                    else:
+                        Ainv = casadi.solve(A, I, options['linear_solver']) # TODO: Is it better to solve twice instead?
                     CAinv = casadi.mul(C, Ainv)
-                    torn_sol = casadi.solve(D - casadi.mul(CAinv, B),
-                                            b - casadi.mul(CAinv, a), options['linear_solver'])
+                    if options['closed_form']:
+                        torn_sol = casadi.solve(D - casadi.mul(CAinv, B),
+                                                b - casadi.mul(CAinv, a))
+                    else:
+                        torn_sol = casadi.solve(D - casadi.mul(CAinv, B),
+                                                b - casadi.mul(CAinv, a), options['linear_solver'])
                     causal_sol = casadi.mul(Ainv, a - casadi.mul(B, torn_sol))
                     sol = casadi.vertcat([causal_sol, torn_sol])
 
@@ -1203,7 +1217,7 @@ class BLTModel(object):
                         dh()
 
                     # Store causal solution
-                    for (i, var) in enumerate(co.causalized_vars + co.tearing_variables):
+                    for (i, var) in enumerate(co.causalized_vars + co.block_tear_vars):
                         if var.is_der:
                             if options['closed_form']:
                                 residuals.append(var.sx_var - sol[i])
@@ -1211,7 +1225,7 @@ class BLTModel(object):
                                 residuals.append(var.mx_var - sol[i])
                         else:
                             explicit_solved_algebraics.append((len(solved_vars) + i, var))
-                    mx_vars = [var.mx_var for var in co.causalized_vars + co.tearing_variables]
+                    mx_vars = [var.mx_var for var in co.causalized_vars + co.block_tear_vars]
                     solved_vars.extend(mx_vars)
                     explicit_solved_vars.extend(mx_vars)
                     if options['closed_form'] and not options['inline_solved']:
@@ -1291,132 +1305,119 @@ class BLTModel(object):
                     solved_expr.extend([sol[i] for i in range(sol.numel())])
             else:
                 if co.torn:
-                    causal_graph = co.tear_nonlin_eq(known_vars, solved_vars, self._graph.matches, global_index)
+                    for var in co.block_tear_vars:
+                        self._dependencies[var.name] = 1
+
+                    co.causal_graph = co.tear_nonlin_eq(known_vars, solved_vars, self._graph.matches, global_index)
                     tear_mx_vars = [var.mx_var for var in co.block_tear_vars]
 
-                    # Eliminate causal variables
-                    for causal_co in causal_graph.components:
-                        # Compute A
-                        if options['closed_form']:
-                            if options['inline_solved']:
-                                A_input = causal_co.n * [np.nan] + sx_known_vars + solved_expr
-                            else:
-                                A_input = causal_co.n * [np.nan] + sx_known_vars + sx_solved_vars
-                        else:
-                            A_input = causal_co.n * [np.nan] + known_vars + solved_expr
-                        A = causal_co.A_fcn.call(A_input, self.options['inline'])[0]
-
-                        # Compute b
-                        # Block variables need a (any) real value in order to find b
-                        if options['closed_form']:
-                            if options['inline_solved']:
-                                something = []
-                                b_input = causal_co.n * [1.] + sx_known_vars + solved_expr + something
-                                dh() # TODO: something
-                            else:
-                                something = []
-                                b_input = causal_co.n * [1.] + sx_known_vars + sx_solved_vars + something
-                                dh() # TODO: something
-                        else:
-                            b_input = causal_co.n * [1.] + known_vars + solved_expr + tear_mx_vars
-                        b = causal_co.b_fcn.call(b_input, self.options['inline'])[0]
+                    for causal_co in co.causal_graph.components:
+                        # Eliminate causal variable
+                        if self._sparsity_preserving(causal_co):
+                            causal_co.create_lin_eq(known_vars, solved_vars, [var.mx_var for var in co.block_tear_vars])
                             
-                        # Solve
-                        if options['closed_form']:
-                            sol = casadi.mul(casadi.inv(A), b)
-                            casadi.simplify(sol)
-                        else:
-                            sol = casadi.solve(A, b, options['linear_solver'])
-
-                        # Create residuals
-                        dh()
-                        # To continue here I need to know whether all causalized variables should be eliminated!
-                        # In other words, whether state derivatives and unsolvable variables might be causalized.
-                        for (i, var) in enumerate(causal_co.variables):
-                            if var.is_der:
-                                if options['closed_form']:
-                                    residuals.append(var.sx_var - sol[i])
+                            # Compute A
+                            if options['closed_form']:
+                                if options['inline_solved']:
+                                    A_input = causal_co.n * [np.nan] + sx_known_vars + solved_expr
                                 else:
-                                    residuals.append(var.mx_var - sol[i])
+                                    A_input = causal_co.n * [np.nan] + sx_known_vars + sx_solved_vars
                             else:
-                                explicit_solved_algebraics.append((len(solved_vars) + i, var))
+                                A_input = causal_co.n * [np.nan] + known_vars + solved_expr
+                            A = causal_co.A_fcn.call(A_input, self.options['inline'])[0]
 
-                        # Store solution
-                        solved_vars.extend(causal_co.mx_vars)
-                        explicit_solved_vars.extend(causal_co.mx_vars)
-                        if options['closed_form'] and not options['inline_solved']:
-                            sx_solved_vars += [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in causal_co.mx_vars]]
-                        solved_expr.extend([sol[i] for i in range(sol.numel())])
+                            # Compute b
+                            # Block variables need a (any) real value in order to find b
+                            if options['closed_form']:
+                                if options['inline_solved']:
+                                    something = []
+                                    b_input = causal_co.n * [1.] + sx_known_vars + solved_expr + something
+                                    dh() # TODO: something
+                                else:
+                                    something = []
+                                    b_input = causal_co.n * [1.] + sx_known_vars + sx_solved_vars + something
+                                    dh() # TODO: something
+                            else:
+                                b_input = causal_co.n * [1.] + known_vars + solved_expr + tear_mx_vars
+                            b = causal_co.b_fcn.call(b_input, self.options['inline'])[0]
+                                
+                            # Solve
+                            if options['closed_form']:
+                                sol = casadi.mul(casadi.inv(A), b)
+                                casadi.simplify(sol)
+                            else:
+                                sol = casadi.solve(A, b, options['linear_solver'])
 
-                    #~ # Compute equation system components
-                    #~ # Block variables need a (any) real value in order to find right-hand sides
-                    #~ eq_sys = {}
-                    #~ if options['closed_form']:
-                        #~ if options['inline_solved']:
-                            #~ inputs = co.n * [1.] + sx_known_vars + solved_expr
-                        #~ else:
-                            #~ inputs = co.n * [1.] + sx_known_vars + sx_solved_vars
-                    #~ else:
-                        #~ inputs = co.n * [1.] + known_vars + solved_expr
-                    #~ for alpha in ["A", "B", "C", "D", "a", "b"]:
-                        #~ eq_sys[alpha] = co.fcn[alpha].call(inputs, self.options['inline'])[0]
+                            # Create residuals
+                            for (i, var) in enumerate(causal_co.variables):
+                                if var.is_der:
+                                    if options['closed_form']:
+                                        residuals.append(var.sx_var - sol[i])
+                                    else:
+                                        residuals.append(var.mx_var - sol[i])
+                                else:
+                                    explicit_solved_algebraics.append((len(solved_vars) + i, var))
 
-                    #~ # Analyze block matrix solution
-                    #~ if options['analyze_var'] in [var.name for var in co.variables]:
-                        #~ # Get nominal values
-                        #~ known_mvars = [self.getVariable(var.getName()) for var in known_vars[1:]]
-                        #~ solved_mvars = [self.getVariable(var.getName()) for var in solved_vars]
-                        #~ attr = "initialGuess" # "nominal"
-                        #~ nominal_known = [0.] + [self.get_attr(var, attr) for var in known_mvars]
-                        #~ nominal_solved = [self.get_attr(var, attr) for var in solved_mvars]
+                            # Store solution
+                            solved_vars.extend(causal_co.mx_vars)
+                            explicit_solved_vars.extend(causal_co.mx_vars)
+                            if options['closed_form'] and not options['inline_solved']:
+                                sx_solved_vars += [casadi.SX.sym(name) for name in [var.__repr__()[3:-1]
+                                                   for var in causal_co.mx_vars]]
+                            solved_expr.extend([sol[i] for i in range(sol.numel())])
+                        else:
+                            # Do not eliminate
+                            for var in causal_co.variables:
+                                self._dependencies[var.name] = 1
+                            
+                            n_unsolvable += causal_co.n
+                            explicit_unsolved_algebraics.extend([var.mvar for var in causal_co.variables
+                                                                 if not var.is_der])
+                            explicit_unsolved_vars.extend(causal_co.mx_vars)
+                            if options['closed_form']:
+                                # Create SX residual
+                                res = casadi.vertcat(causal_co.eq_expr)
+                                all_vars = causal_co.mx_vars + known_vars + solved_vars 
+                                res_f = casadi.MXFunction(all_vars , [res])
+                                res_f.init()
+                                sx_res = casadi.SXFunction(res_f)
+                                sx_res.init()
+                                residuals.extend(sx_res.call(causal_co.sx_vars + sx_known_vars + solved_expr, True))
+                                solved_expr.extend(causal_co.sx_vars)
+                            else:
+                                res = casadi.vertcat(causal_co.eq_expr)
+                                all_vars = causal_co.mx_vars + known_vars + solved_vars 
+                                res_f = casadi.MXFunction(all_vars , [res])
+                                res_f.init()
+                                residuals.extend(res_f.call(causal_co.mx_vars + known_vars + solved_expr))
+                                solved_expr.extend(causal_co.mx_vars)
+                            solved_vars.extend(causal_co.mx_vars)
+                    
+                    n_unsolvable += len(co.block_tear_vars)
+                    explicit_unsolved_algebraics.extend([var.mvar for var in co.block_tear_vars if not var.is_der])
+                    explicit_unsolved_vars.extend([var.mx_var for var in co.block_tear_vars])
+                    if options['closed_form']:
+                        # Create SX residual
+                        res = casadi.vertcat([eq.expression for eq in co.block_tear_res])
+                        co.tear_mx_vars = tear_mx_vars = [var.mx_var for var in co.block_tear_vars]
+                        all_vars = tear_mx_vars + known_vars + solved_vars
+                        res_f = casadi.MXFunction(all_vars , [res])
+                        res_f.init()
+                        sx_res = casadi.SXFunction(res_f)
+                        sx_res.init()
+                        residuals.extend(sx_res.call(tear_mx_vars + known_vars + solved_expr, True))
 
-                        #~ # Compute nominal components
-                        #~ for alpha in ["A", "B", "C", "D", "a", "b"]:
-                            #~ alpha_fcn = casadi.MXFunction(known_vars + solved_vars, [eq_sys[alpha]])
-                            #~ alpha_fcn.init()
-                            #~ eq_sys[alpha] = alpha_fcn.call(nominal_known + nominal_solved)[0].toArray()
-
-                    #~ # Extract equation system components
-                    #~ A = eq_sys["A"]
-                    #~ B = eq_sys["B"]
-                    #~ C = eq_sys["C"]
-                    #~ D = eq_sys["D"]
-                    #~ a = eq_sys["a"]
-                    #~ b = eq_sys["b"]
-
-                    #~ # Solve component equations using Schur complement
-                    #~ I = np.eye(A.shape[0])
-                    #~ Ainv = casadi.solve(A, I, options['linear_solver']) # TODO: Is it better to solve twice instead?
-                    #~ CAinv = casadi.mul(C, Ainv)
-                    #~ torn_sol = casadi.solve(D - casadi.mul(CAinv, B),
-                                            #~ b - casadi.mul(CAinv, a), options['linear_solver'])
-                    #~ causal_sol = casadi.mul(Ainv, a - casadi.mul(B, torn_sol))
-                    #~ sol = casadi.vertcat([causal_sol, torn_sol])
-
-                    #~ # Analyze block matrix solution
-                    #~ if options['analyze_var'] in [var.name for var in co.variables]:
-                        #~ A_big = casadi.vertcat([casadi.horzcat([A, B]), casadi.horzcat([C, D])]).toArray()
-                        #~ b_big = casadi.vertcat([a, b]).toArray()
-                        #~ res = casadi.mul(A_big, sol) - b_big
-                        #~ sol = sol.toArray()
-                        #~ res = res.toArray()
-                        #~ dh()
-
-                    #~ # Store causal solution
-                    #~ for (i, var) in enumerate(co.causalized_vars + co.tearing_variables):
-                        #~ if var.is_der:
-                            #~ if options['closed_form']:
-                                #~ residuals.append(var.sx_var - sol[i])
-                            #~ else:
-                                #~ residuals.append(var.mx_var - sol[i])
-                        #~ else:
-                            #~ explicit_solved_algebraics.append((len(solved_vars) + i, var))
-                    #~ mx_vars = [var.mx_var for var in co.causalized_vars + co.tearing_variables]
-                    #~ solved_vars.extend(mx_vars)
-                    #~ explicit_solved_vars.extend(mx_vars)
-                    #~ if options['closed_form'] and not options['inline_solved']:
-                        #~ sx_solved_vars += [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in mx_vars]]
-                    #~ solved_expr.extend([sol[i] for i in range(sol.numel())])
+                        dh()
+                        #~ solved_expr.extend(co.sx_vars) # Need to figure out what do here
+                    else:
+                        res = casadi.vertcat([eq.expression for eq in co.block_tear_res])
+                        co.tear_mx_vars = tear_mx_vars = [var.mx_var for var in co.block_tear_vars]
+                        all_vars = tear_mx_vars + known_vars + solved_vars
+                        res_f = casadi.MXFunction(all_vars , [res])
+                        res_f.init()
+                        residuals.extend(res_f.call(tear_mx_vars + known_vars + solved_expr))
+                        solved_expr.extend(tear_mx_vars)
+                    solved_vars.extend(tear_mx_vars)
                 else:
                     for var in co.variables:
                         self._dependencies[var.name] = 1

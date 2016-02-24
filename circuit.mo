@@ -9,6 +9,7 @@ model Circuit
     parameter Real omega = 1;
 equation
     u0 = sin(omega*time);
+    //u0 = 1;
     u1 = R1 * i1;
     u2 = R2 * i2;
     

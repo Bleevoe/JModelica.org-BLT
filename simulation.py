@@ -160,7 +160,7 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     else:
         raise ValueError("Unknown solver %s" % solver)
     simulator.rtol = tol
-    simulator.atol = tol * 10 * np.array([model.get_attr(var, "nominal") for var in model_states + model_algs])
+    simulator.atol = 1e-4 * np.array([model.get_attr(var, "nominal") for var in model_states + model_algs])
     #~ simulator.atol = tol * np.ones([n_y, 1])
     simulator.report_continuously = True
 

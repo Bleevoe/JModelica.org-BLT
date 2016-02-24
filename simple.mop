@@ -1,9 +1,11 @@
 model Simple3
     Real x(start=1, fixed=true);
     Real y;
+    Real z;
 equation
-    der(x) = x + y;
-    y = -2*x;
+    der(x) = x + y + z;
+    y + z = x;
+    -y + 2*z = 2*x;
 end Simple3;
 
 model Simple

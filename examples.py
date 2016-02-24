@@ -9,11 +9,12 @@ import os
 from pyjmi.common.io import ResultDymolaTextual
 from pyjmi.optimization.casadi_collocation import LocalDAECollocationAlgResult
 from pyjmi.common.core import TrajectoryLinearInterpolation
+import numpy as np
 
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4"][4]
+    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4", "fourbar1"][-1]
     source = ["Modelica", "strings"][0]
     
     blt = True
@@ -27,15 +28,16 @@ if __name__ == "__main__":
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
     caus_opts['draw_blt'] = True
-    caus_opts['solve_blocks'] = True
+    #~ caus_opts['solve_blocks'] = True
+    caus_opts['dense_tol'] = np.inf
     #~ caus_opts['inline'] = False
     #~ caus_opts['closed_form'] = True
     #~ caus_opts['inline_solved'] = True
 
     if problem == "simple":
         #~ caus_opts['tearing'] = True
-        #~ caus_opts['tear_vars'] = ['z']
-        #~ caus_opts['tear_res'] = [2]
+        caus_opts['tear_vars'] = ['z']
+        caus_opts['tear_res'] = [2]
         start_time = 0.
         final_time = 2.
         input = lambda t: []
@@ -53,9 +55,11 @@ if __name__ == "__main__":
             opts = {'eliminate_alias_variables': False, 'generate_html_diagnostics': True}
             model = transfer_model(class_name, file_paths, compiler_options=opts)
             init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
-    if problem == "circuit":
+    elif problem == "circuit":
         caus_opts['tearing'] = True
         caus_opts['tear_vars'] = ['i3']
+        caus_opts['tear_res'] = [8]
+        #~ caus_opts['analyze_var'] = 'u2'
         start_time = 0.
         final_time = 100.
         input = lambda t: []
@@ -73,11 +77,12 @@ if __name__ == "__main__":
         else:
             class_name = "Circuit"
             file_paths = "circuit.mo"
-            opts = {'eliminate_alias_variables': True, 'generate_html_diagnostics': True}
+            opts = {'eliminate_alias_variables': True, 'generate_html_diagnostics': True,
+                    'variability_propagation': False}
             model = transfer_model(class_name, file_paths, compiler_options=opts)
             ncp = 500 * model.get('omega')
             init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
-    if problem == "vehicle":
+    elif problem == "vehicle":
         sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
         start_time = 0.
         final_time = sim_res.get_variable_data('time').t[-1]
@@ -122,13 +127,14 @@ if __name__ == "__main__":
         init_fmu.set('Y0', Y_start)
         init_fmu.set('psi0', psi_start)
         init_fmu.set('vx0', vx_start)
-    if problem == "double_pendulum":
+    elif problem == "double_pendulum":
         if source != "Modelica":
             raise ValueError
         class_name = "DoublePendulum"
         file_path = "double_pendulum.mop"
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'index_reduction': True, 'automatic_add_initial_equations': True}
-        opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'inline_functions': 'all'}
+        opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'inline_functions': 'all',
+                'expose_temp_vars_in_fmu': True}
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False}
         #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
         init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:fmu_log.txt'))
@@ -137,9 +143,9 @@ if __name__ == "__main__":
         model = transfer_model("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:ci_log.txt')
 
         start_time = 0.
-        final_time = 10.
+        final_time = 1.
         ncp = 500
-    if problem == "ccpp":
+    elif problem == "ccpp":
         #~ caus_opts['uneliminable'] = ['der(plant.evaporator.alpha)']
         #~ caus_opts['uneliminable'] = ['plant.sigma', 'der(plant.evaporator.alpha)']
         start_time = 0.
@@ -154,7 +160,7 @@ if __name__ == "__main__":
         opts = {'generate_html_diagnostics': True}
         model = transfer_model(class_name, file_paths, compiler_options=opts)
         init_fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=opts))
-    if problem == "hrsg":
+    elif problem == "hrsg":
         #~ caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
         if source != "Modelica":
             raise ValueError
@@ -172,7 +178,7 @@ if __name__ == "__main__":
         start_time = 400.
         final_time = 5400.
         ncp = 500
-    if problem == "dist4":
+    elif problem == "dist4":
         #~ caus_opts['uneliminable'] = ['Dist', 'Bott']
         if source != "Modelica":
             raise ValueError
@@ -207,6 +213,24 @@ if __name__ == "__main__":
             init_fmu.set('Temp_init[' + `i` + ']', break_res.get_variable_data('Temp[' + `i` + ']').x[-1])
             if i < 42:
                 init_fmu.set('V_init[' + `i` + ']', break_res.get_variable_data('V[' + `i` + ']').x[-1])
+    elif problem == "fourbar1":
+        if source != "Modelica":
+            raise ValueError
+        #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'index_reduction': True, 'automatic_add_initial_equations': True}
+        opts = {'generate_html_diagnostics': True, 'dynamic_states': False,'inline_functions': 'all',
+                'expose_temp_vars_in_fmu': True}
+        #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'expose_temp_vars_in_fmu': True}
+        #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
+        init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Loops.Fourbar1", compiler_options=opts))
+        #~ model = transfer_model(class_name, file_path, compiler_options=opts)
+        opts['generate_html_diagnostics'] = False
+        model = transfer_model("Modelica.Mechanics.MultiBody.Examples.Loops.Fourbar1", compiler_options=opts)
+
+        start_time = 0.
+        final_time = 1.
+        ncp = 500
+    else:
+		raise ValueError("Unknown problem %s." % problem)
 
     # Compute initial conditions
     if source == "Modelica":
@@ -243,7 +267,7 @@ if __name__ == "__main__":
     #~ init_cond = {'der(x)': 1, 'x': 0, 'y': 1}
 
     # Simulate and plot
-    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, tol=1e-8)
+    res = simulate(model, init_cond, start_time, final_time, input, ncp, blt, caus_opts, expand_to_sx, suppress_alg, tol=1e-4)
     if problem == "simple":
         t = res['time']
         #~ a = res['a']
