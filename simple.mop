@@ -9,15 +9,17 @@ equation
 end Simple3;
 
 model Simple
-	Real x(start=1, fixed=true);
-	parameter Real p1 = 1;
-	parameter Real p2 = 9;
+	Real x1(start=1, fixed=true);
+	Real x2(start=1, fixed=true);
+	Real y1;
+	Real y2;
+	Real u;
 equation
-	if x > 0 then
-		der(x) = -p2*x;
-	else
-		der(x) = p2*x;
-	end if;
+	der(x1) = der(x2) + y1 + u;
+	der(x2) = y2 + u;
+	der(x1) = time;
+	y2 = time;
+	u = time;
 end Simple;
 
 function p2_fcn
@@ -51,7 +53,7 @@ equation
     sqrt(a^2+b^2)-a-b= 0;
 end Fischer;
 
-optimization Simple_Opt(objectiveIntegrand=x^2, finalTime=10)
+optimization Simple_Opt//(objectiveIntegrand=x^2, finalTime=10)
     extends Simple;
 end Simple_Opt;
 

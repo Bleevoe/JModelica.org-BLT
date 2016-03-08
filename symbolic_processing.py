@@ -89,9 +89,14 @@ class CausalizationOptions(dict):
             Default: "symbolicqr"
 
         dense_tol --
-            Tolerance for controlling density in causalized system. Possible values: [1, inf]
+            Tolerance for controlling density in causalized system. Possible values: [0, inf]
 
-            Default: 15
+            Default: 5
+
+        dense_measure --
+            Density measure for controlling density in causalized system. Possible values: ['Markowitz', 'Magnusson']
+
+            Default: 'Magnusson'
     """
 
     def __init__(self):
@@ -108,7 +113,8 @@ class CausalizationOptions(dict):
         self['inline_solved'] = False
         self['uneliminable'] = []
         self['linear_solver'] = "symbolicqr"
-        self['dense_tol'] = 10
+        self['dense_tol'] = 5
+        self['dense_measure'] = 'Magnusson'
 
         # Experimental options to be removed
         self['analyze_var'] = None
@@ -1463,26 +1469,50 @@ class BLTModel(object):
         """
         # Find dependencies
         block_var_names = [var.getName() for var in co.mx_vars]
-        dep_names = []
+        deps = []
         for i in xrange(co.n):
             for vk in ['dx', 'x', 'u', 'w']:
                 for var in self._mx_var_struct[vk]:
                     if casadi.dependsOn(co.eq_expr[i], [var]) and not var.getName() in block_var_names:
-                        dep_names.append(var.getName())
-        dep_names = list(set(dep_names))
-
+                        deps.append(var)
+        deps = list(set(deps))
+        
         # Count causalized dependencies
         n_dependencies = 0
-        for dep in dep_names:
-            n_dependencies += self._dependencies[dep]
-
-        # Count incidences
-        n_incidences = 0
-        for var in co.variables:
-            n_incidences = np.max([n_incidences, self._graph.incidences.getcol(var.global_index).getnnz()])
+        for dep in deps:
+            n_dependencies += self._dependencies[dep.getName()]
 
         # Compute density measure
-        if (n_dependencies - 2) * np.sqrt(n_incidences - 1) >= self.options['dense_tol']:
+        if self.options['dense_measure'] == 'Markowitz':
+            # Count incidences
+            n_incidences = 0
+            for var in co.variables:
+                n_incidences = np.max([n_incidences, self._graph.incidences.getcol(var.global_index).getnnz()])
+
+            # Compute measure
+            measure = (n_dependencies - 2) * (n_incidences - 1)
+        elif self.options['dense_measure'] == 'Magnusson':
+            # Only treat scalar blocks
+            if len(co.variables) != 1:
+                raise NotImplementedError
+            var = co.variables[0]
+
+            # Compute measure
+            measure = 0
+            incidences = self._graph.incidences.getcol(var.global_index).nonzero()[0]
+            if len(incidences) > 1:
+                for inc in incidences:
+                    for dep in deps:
+                        # If dependency causes fill-in
+                        if not casadi.dependsOn(self._graph.equations[inc].expression, [dep]):
+                            measure += self._dependencies[dep.getName()]
+                    measure -= 1
+                measure = -1 + measure / np.sqrt(len(incidences) - 1)
+        else:
+            raise ValueError('Unknown density measure %s.' % self.options['dense_measure'])
+
+        # Compare measure with tolerance
+        if measure >= self.options['dense_tol']:
             co.sparsity_preserving = False
             return False
         else:
@@ -1677,9 +1707,11 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
             def __init__(self, op_res):
                 self._op_res = op_res
             def get_data_matrix(self):
-                return op_res.result_data.get_data_matrix()
+                return self._op_res.result_data.get_data_matrix()
             def get_variable_data(self, name):
-                return op_res.result_data.get_variable_data(name)
+                return self._op_res.result_data.get_variable_data(name)
+            def get_opt_input(self):
+                return self._op_res.get_opt_input()
         res = BLTResult(op_res)
         for key in op_res.keys():
             res[key] = op_res[key]

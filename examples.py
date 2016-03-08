@@ -14,8 +14,8 @@ import numpy as np
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4", "fourbar1"][-1]
-    source = ["Modelica", "strings"][0]
+    problem = ["simple", "circuit", "vehicle", "ccpp", "double_pendulum", "hrsg", "dist4", "fourbar1"][4]
+    source = ["Modelica", "strings"][1]
     
     blt = True
     #~ blt = False
@@ -131,16 +131,17 @@ if __name__ == "__main__":
         if source != "Modelica":
             raise ValueError
         class_name = "DoublePendulum"
-        file_path = "double_pendulum.mop"
+        file_path = "double_pendulum.mo"
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'index_reduction': True, 'automatic_add_initial_equations': True}
         opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'inline_functions': 'all',
                 'expose_temp_vars_in_fmu': True}
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False}
-        #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
-        init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:fmu_log.txt'))
+        init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
+        #~ init_fmu = load_fmu(compile_fmu("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:fmu_log.txt'))
         #~ model = transfer_model(class_name, file_path, compiler_options=opts)
         opts['generate_html_diagnostics'] = False
-        model = transfer_model("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:ci_log.txt')
+        #~ model = transfer_model("Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum", compiler_options=opts, compiler_log_level='d:ci_log.txt')
+        model = transfer_model(class_name, file_name, compiler_options=opts, compiler_log_level='d:ci_log.txt')
 
         start_time = 0.
         final_time = 1.
@@ -217,7 +218,7 @@ if __name__ == "__main__":
         if source != "Modelica":
             raise ValueError
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'index_reduction': True, 'automatic_add_initial_equations': True}
-        opts = {'generate_html_diagnostics': True, 'dynamic_states': False,'inline_functions': 'all',
+        opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'inline_functions': 'all',
                 'expose_temp_vars_in_fmu': True}
         #~ opts = {'generate_html_diagnostics': True, 'dynamic_states': False, 'expose_temp_vars_in_fmu': True}
         #~ init_fmu = load_fmu(compile_fmu(class_name, file_path, compiler_options=opts))
@@ -260,7 +261,7 @@ if __name__ == "__main__":
         
         init_cond = dict([(name, init_fmu.get(fmu_name)[0]) for (name, fmu_name) in zip(names, fmu_names)])
     elif source == "strings":
-        if problem == "Simple":
+        if problem == "simple":
             init_cond = {'der(x)': -1, 'x': 1, 'y': -2}
         else:
             raise NotImplementedError

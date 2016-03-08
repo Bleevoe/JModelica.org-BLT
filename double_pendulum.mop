@@ -1,7 +1,23 @@
-optimization DoublePendulum
+optimization DoublePendulum_Opt_MinTime(finalTime(free=true), objective=finalTime)
+	constant Real pi = Modelica.Constants.pi;
 	parameter Real phi_max = 20;
-	extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum;
+	extends DoublePendulum(u(min=-500, max=500));
     //extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum(
 	//		revolute1.phi(min=-phi_max, max=phi_max), revolute2.phi(min=-phi_max, max=phi_max));
-end DoublePendulum;
+constraint
+    revolute1.phi(finalTime) = -pi/2;
+    revolute2.phi(finalTime) = 0;
+    revolute1.w(finalTime) = 0;
+    revolute2.w(finalTime) = 0;
+end DoublePendulum_Opt_MinTime;
+
+optimization DoublePendulum_Opt(objectiveIntegrand=
+    (revolute1.phi-pi/2)^2 + revolute2.phi^2 +
+     0.1*revolute1.w^2 + 0.1*revolute2.w^2 + (u/1000)^2)
+	constant Real pi = Modelica.Constants.pi;
+	parameter Real phi_max = 20;
+	extends DoublePendulum(u(min=-500, max=500));
+    //extends Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum(
+	//		revolute1.phi(min=-phi_max, max=phi_max), revolute2.phi(min=-phi_max, max=phi_max));
+end DoublePendulum_Opt;
 

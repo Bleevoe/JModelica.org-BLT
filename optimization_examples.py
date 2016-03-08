@@ -12,11 +12,12 @@ from pyjmi.common.core import TrajectoryLinearInterpolation
 from pyjmi.optimization.casadi_collocation import LocalDAECollocationAlgResult
 import time
 import numpy as np
+import scipy.io as sio
 
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4", "fourbar1"][-3]
+    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4", "fourbar1"][4]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
@@ -31,7 +32,8 @@ if __name__ == "__main__":
     caus_opts['draw_blt'] = True
     caus_opts['blt_strings'] = False
     caus_opts['solve_blocks'] = True
-    caus_opts['dense_tol'] = 10
+    #~ caus_opts['dense_tol'] = np.inf
+    #~ caus_opts['dense_measure'] = 'Markowitz'
     #~ caus_opts['blt_strings'] = False
     #~ caus_opts['dense_tol'] = 10
     #~ caus_opts['ad_hoc_scale'] = True
@@ -121,20 +123,23 @@ if __name__ == "__main__":
         uneliminable = []
         
         caus_opts['tear_vars'] = ['der(boxBody1.body.w_a[3])', 'der(boxBody2.body.w_a[3])']
-        caus_opts['tear_res'] = [50, 90]
+        caus_opts['tear_res'] = [50, 115]
+        #~ caus_opts['tear_res'] = [50, 90]
+        #~ caus_opts['tear_res'] = [50]
         caus_opts['tearing'] = True
         #~ caus_opts['solve_torn_linear_blocks'] = True
-        time_horizon = 6
+        time_horizon = 5
         
         if source != "Modelica":
             raise ValueError
-        class_name = "DoublePendulum"
-        file_path = "msl.mop"
+        class_name = "DoublePendulum_Opt"
+        file_paths = ("double_pendulum.mo", "double_pendulum.mop", "DoublePendulumFeedback.mo")
         opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
                 'expose_temp_vars_in_fmu': True}
-        msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
-        fmu = load_fmu(compile_fmu(msl_pendulum, compiler_options=opts))
-        init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
+        #~ msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('double_pendulum_sol.txt'))
+        init_fmu = load_fmu(compile_fmu("DoublePendulumFeedback", file_paths, compiler_options=opts))
+        init_res = init_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
         
         #~ init_op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
         #~ init_op.set('finalTime', time_horizon)
@@ -149,15 +154,17 @@ if __name__ == "__main__":
             #~ init_op = sp.BLTOptimizationProblem(init_op, caus_opts)
         #~ init_res = init_op.optimize(options=opt_opts)
         
-        op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
+        op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
         op.set('finalTime', time_horizon)
         opt_opts = op.optimize_options()
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
         opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
+        opt_opts['IPOPT_options']['tol'] = 1e-8
         #~ opt_opts['n_e'] = 356
-        opt_opts['n_e'] = 200
+        opt_opts['n_e'] = 400
+        #~ opt_opts['blocking_factors'] = 100 * [opt_opts['n_e']/100]
     elif problem == "ccpp":
         #~ caus_opts['analyze_var'] = 'der(plant.evaporator.alpha)'
         caus_opts['uneliminable'] = ['plant.sigma']
@@ -205,7 +212,9 @@ if __name__ == "__main__":
                                  #~ 77, 67, 52, 53, 43, 44, 35, 34,
                                  71, 70]
         caus_opts['tearing'] = True
-        
+        #~ caus_opts['dense_measure'] = 'Markowitz'
+        caus_opts['dense_tol'] = 15
+                
         if source != "Modelica":
             raise ValueError
         class_name = "HeatRecoveryOptim.Plant_optim"
@@ -435,26 +444,52 @@ if __name__ == "__main__":
             y1 = r1*sin(phi1)
             x2 = x1 + r2*cos(phi1 + phi2)
             y2 = y1 + r2*sin(phi1 + phi2)
+            sim_fmu = load_fmu(compile_fmu("DoublePendulum", file_paths))
+            sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
+                                       input=res.get_opt_input())
+            sim_time = sim_res['time']
+            sim_phi1 = sim_res['revolute1.phi']
+            sim_phi2 = sim_res['revolute2.phi']
+            sim_r1 = sim_res['boxBody1.r[1]'][0]
+            sim_r2 = sim_res['boxBody2.r[1]'][0]
+            sim_x1 = sim_r1*cos(sim_phi1)
+            sim_y1 = sim_r1*sin(sim_phi1)
+            sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
+            sim_y2 = sim_y1 + sim_r2*sin(sim_phi1 + sim_phi2)
+
+            opt_torque = np.vstack([time, res['u']]).T
+            sio.savemat('double_pendulum_sol.mat', {'torque': opt_torque})
+            
             if with_plots:
-                # Plot road
                 plt.close(1)
                 plt.figure(1)
-                plt.plot(init_x1, init_y1, 'b--')
-                plt.plot(init_x2, init_y2, 'r--')
+                plt.plot(init_x1, init_y1, 'b:')
+                plt.plot(init_x2, init_y2, 'r:')
+                plt.plot(sim_x1, sim_y1, 'b--')
+                plt.plot(sim_x2, sim_y2, 'r--')
                 plt.plot(x1, y1, 'b')
                 plt.plot(x2, y2, 'r')
-                plt.legend(['Tip 1 sim', 'Tip 2 sim', 'Tip 1 opt', 'Tip 2 opt'])
+                plt.legend(['Tip 1 init', 'Tip 2 init', 'Tip 1 sim', 'Tip 2 sim', 'Tip 1 opt', 'Tip 2 opt'])
 
                 plt.close(2)
                 plt.figure(2)
-                plt.plot(init_time, init_phi1, 'b--')
-                plt.plot(init_time, init_phi2, 'r--')
+                plt.plot(init_time, init_phi1, 'b:')
+                plt.plot(init_time, init_phi2, 'r:')
+                plt.plot(sim_time, sim_phi1, 'b--')
+                plt.plot(sim_time, sim_phi2, 'r--')
                 plt.plot(time, phi1, 'b')
                 plt.plot(time, phi2, 'r')
-                plt.legend(['$\phi_1$ sim', '$\phi_2$ sim', '$\phi_1$ opt', '$\phi_2$ opt'])
+                plt.legend(['$\phi_1$ init', '$\phi_2$ init', '$\phi_1$ sim', '$\phi_2$ sim',
+                            '$\phi_1$ opt', '$\phi_2$ opt'])
+
+                plt.close(3)
+                plt.figure(3)
+                plt.plot(init_time, init_res['u'], 'b:')
+                plt.plot(time, res['u'], 'b')
+                plt.legend(['$u$ init', '$u$ opt'])
                 
                 plt.show()
-        elif problem == "double_pendulum":
+        elif problem == "fourbar1":
             time = res['time']
             rev2angle = res['revolute2.angle']
             if with_plots:
