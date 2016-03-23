@@ -1,0 +1,9 @@
+within Fourbar1;
+
+optimization Fourbar1_Opt(objectiveIntegrand=(fourbar1.j2.s+0.35)^2 + 0*0.01*fourbar1.j2.v^2 + 1e-8*(u+54.52)^2)
+    Fourbar1.Fourbar1 fourbar1;
+    input Real u(min=-100, max=100);
+equation
+    fourbar1.u = u;
+end Fourbar1_Opt;
+
