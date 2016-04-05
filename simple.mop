@@ -1,26 +1,15 @@
-model Simple3
-    Real x(start=1, fixed=true);
-    Real y;
-    Real z;
-equation
-    der(x) = x + y + z;
-    y + z = x;
-    -y + 2*z = 2*x;
-end Simple3;
-
 model Simple
-	Real x1(start=1, fixed=true);
-	Real x2(start=1, fixed=true);
-	Real y1;
-	Real y2;
-	Real u;
+    Real x(start=0.1, fixed=true);
+    Real y(min=-0.1);
+    parameter Real p = 1;
 equation
-	der(x1) = der(x2) + y1 + u;
-	der(x2) = y2 + u;
-	der(x1) = time;
-	y2 = time;
-	u = time;
+    der(x) = x + y;
+    (p-x)*y + x = 1;
 end Simple;
+
+optimization Simple_Opt(finalTime=0.6)
+    extends Simple;
+end Simple_Opt;
 
 function p2_fcn
     input Real p1;
@@ -53,12 +42,8 @@ equation
     sqrt(a^2+b^2)-a-b= 0;
 end Fischer;
 
-optimization Simple_Opt//(objectiveIntegrand=x^2, finalTime=10)
-    extends Simple;
-end Simple_Opt;
-
 optimization Triangular
-	constant Integer n = 30;
+	constant Integer n = 60;
 	Real x[n](each start=1, each fixed=true);
 	Real y[n];
 equation
@@ -71,7 +56,7 @@ equation
 end Triangular;
 
 optimization TriangularOpt(objectiveIntegrand=50*n*(x[n] - 2)^2 + u^2, finalTime=3)
-	constant Integer n = 20;
+	constant Integer n = 60;
 	Real x[n](each start=1, each fixed=true);
 	Real y[n];
 	input Real u(min=-1, max=1);

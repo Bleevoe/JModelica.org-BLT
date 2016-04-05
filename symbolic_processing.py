@@ -91,12 +91,14 @@ class CausalizationOptions(dict):
         dense_tol --
             Tolerance for controlling density in causalized system. Possible values: [0, inf]
 
-            Default: 5
+            Default: 10
 
         dense_measure --
-            Density measure for controlling density in causalized system. Possible values: ['Markowitz', 'Magnusson']
+            Density measure for controlling density in causalized system. Possible values: ['lmfi', 'Markowitz']
 
-            Default: 'Magnusson'
+            Markowitz uses the Markowitz criterion and lmfi uses local minimum fill-in to estimate density.
+
+            Default: 'lmfi'
     """
 
     def __init__(self):
@@ -113,8 +115,8 @@ class CausalizationOptions(dict):
         self['inline_solved'] = False
         self['uneliminable'] = []
         self['linear_solver'] = "symbolicqr"
-        self['dense_tol'] = 5
-        self['dense_measure'] = 'Magnusson'
+        self['dense_tol'] = 10
+        self['dense_measure'] = 'lmfi'
 
         # Experimental options to be removed
         self['analyze_var'] = None
@@ -245,23 +247,60 @@ class Component(object):
                 sx_vars.append(vertex.variable.sx_var)
 
         # Check equation properties
-        self.solvable = self._is_solvable()
         self.torn = self._is_torn()
+        self.solvable = self._is_solvable()
         self.linear = self._is_linear(edges)
         self.sparsity_preserving = NonBool()
+
+    def _is_torn(self):
+        """
+        Find tearing variables and residuals of block, and check if there are any.
+        """
+        if self.options['tearing']:
+            self.block_tear_vars = []
+            self.block_tear_res = []
+            self.block_causal_vars = []
+            self.block_causal_equations = []
+            for var in self.variables:
+                if var.name in self.tear_vars:
+                    self.block_tear_vars.append(var)
+                else:
+                    self.block_causal_vars.append(var)
+            for eq in self.equations:
+                if eq.global_index in self.tear_res:
+                    self.block_tear_res.append(eq)
+                else:
+                    self.block_causal_equations.append(eq)
+            if len(self.block_tear_vars) != len(self.block_tear_res):
+                self.debug_tearing()
+                raise RuntimeError("Number of tearing variables does not match number of residuals for block. " +
+                                   "See above printouts for block variables and equations.")
+            if len(self.block_tear_vars) > 0:
+                if self.n == 1:
+                    raise RuntimeError("Tearing variable %s selected for scalar block." % var.name)
+                else:
+                    return True
+            else:
+                return False
+        else:
+            return False
 
     def _is_solvable(self):
         """
         Check solvability.
         """
-        # Check if block contains uneliminable variables
-        for var in self.mvars:
-            if var.getName() in self.options['uneliminable']:
-                return False
+        # Torn blocks are always solvable
+        if self.torn:
+            return True
 
         # Check if scalar
         if not self.options['solve_blocks'] and self.n > 1:
             return False
+
+        # Blocks containing derivatives or uneliminable variables are not solvable
+        for var in self.variables:
+            if var.is_der or var.name in self.options['uneliminable']:
+                return False
 
         return True
 
@@ -294,41 +333,6 @@ class Component(object):
         if not self.options['solve_torn_linear_blocks'] and self.torn:
             return False
         return is_linear
-
-    def _is_torn(self):
-        """
-        Find tearing variables and residuals of block, and check if there are any.
-        """
-        if self.options['solve_blocks']:
-            self.block_tear_vars = []
-            self.block_tear_res = []
-            self.block_causal_vars = []
-            self.block_causal_equations = []
-            if not self.options['tearing']:
-                return False
-            for var in self.variables:
-                if var.name in self.tear_vars:
-                    self.block_tear_vars.append(var)
-                else:
-                    self.block_causal_vars.append(var)
-            for eq in self.equations:
-                if eq.global_index in self.tear_res:
-                    self.block_tear_res.append(eq)
-                else:
-                    self.block_causal_equations.append(eq)
-            if len(self.block_tear_vars) != len(self.block_tear_res):
-                self.debug_tearing()
-                raise RuntimeError("Number of tearing variables does not match number of residuals for block. " +
-                                   "See above printouts for block variables and equations.")
-            if len(self.block_tear_vars) > 0:
-                if self.n == 1:
-                    raise RuntimeError("Tearing variable %s selected for scalar block." % var.name)
-                else:
-                    return True
-            else:
-                return False
-        else:
-            return False
 
     def debug_tearing(self):
         """
@@ -530,7 +534,12 @@ class Component(object):
         causal_graph = BipartiteGraph(causal_equations, causal_variables, causal_edges, [], [], CausalizationOptions())
 
         # Compute components and verify scalarity
-        causal_graph.maximum_match()
+        try:
+            causal_graph.maximum_match()
+        except RuntimeError:
+            self.debug_tearing()
+            raise RuntimeError("Causalized equations in torn block are structurally singular. " +
+                               "See above printouts for block variables and equations.")
         causal_graph.scc(global_index)
         if causal_graph.n != len(causal_graph.components):
             self.debug_tearing()
@@ -645,8 +654,9 @@ class BipartiteGraph(object):
         # Draw BLT incidence matrix
         if self.components:
             plt.close(idx)
-            plt.figure(idx)
+            fig = plt.figure(idx, frameon=False)
             if not strings:
+                fig.gca().set_frame_on(False)
                 plt.tick_params(
                     axis='both',       # changes apply to both axes
                     which='both',      # both major and minor ticks are affected
@@ -707,7 +717,7 @@ class BipartiteGraph(object):
                 plt.plot([i_new, i_new], [-i, -i_new], color, lw=lw)
                 i = i_new - offset + 1
             for edge in self.edges:
-                ms = 100.0 / self.n ** 0.8
+                ms = 100.0 / self.n ** 0.7
                 if edge.var.is_der:
                     marker='d'
                     mew = 2
@@ -789,6 +799,7 @@ class BipartiteGraph(object):
         L_union = copy.copy(L[0])
         E = []
         i = 0
+        bp = (L[0][0].string == "der(pendulum.boxBody1.body.w_a[3])-der(pendulum.revolute1.phi,2)")
         while set(L[-1]) & set(unmatched_varis) == set():
             if i % 2 == 0:
                 E_i = [(edge.var, edge.eq) for edge in self.edges if ((edge.eq in L[i]) and (edge.var not in L_union) and ((edge.eq, edge.var) not in self.matches))]
@@ -800,6 +811,8 @@ class BipartiteGraph(object):
                 E_i = [(edge.eq, edge.var) for edge in self.edges if ((edge.var in L[i]) and (edge.eq not in L_union) and ((edge.eq, edge.var) in self.matches))]
                 E.append(E_i)
                 L_i = self._remove_duplicates([eq for (eq, vari) in E_i])
+            if len(E_i) == 0:
+                raise RuntimeError("Unable to find perfect matching")
             i += 1
             L_union += L_i
             L_union = self._remove_duplicates(L_union)
@@ -1094,7 +1107,7 @@ class BLTModel(object):
         # Create equations
         i = 0
         for named_eq in named_dae:
-            equations.append(Equation(named_eq.__str__()[3:-1], i, i, named_eq))
+            equations.append(Equation(named_eq.__str__()[4:-2], i, i, named_eq))
             i += 1
 
         # Create edges
@@ -1112,7 +1125,13 @@ class BLTModel(object):
         self._dependencies = dependencies = {}
         for vk in ['x', 'u']:
             for var in self._mx_var_struct[vk]:
-                dependencies[var.getName()] = 1
+                dependencies[var.getName()] = [var.getName()]
+
+        for var_name in self.options['uneliminable']:
+            dependencies[var_name] = [var_name]
+
+        for var in self.options['tear_vars']:
+            self._dependencies[var] = [var]
 
     def _create_residuals(self):
         # Create list of named MX variables
@@ -1295,7 +1314,7 @@ class BLTModel(object):
 
                     # Create residuals
                     for (i, var) in enumerate(co.variables):
-                        if var.is_der:
+                        if var.is_der or var.name in self.options['uneliminable']:
                             if options['closed_form']:
                                 residuals.append(var.sx_var - sol[i])
                             else:
@@ -1311,9 +1330,6 @@ class BLTModel(object):
                     solved_expr.extend([sol[i] for i in range(sol.numel())])
             else:
                 if co.torn:
-                    for var in co.block_tear_vars:
-                        self._dependencies[var.name] = 1
-
                     co.causal_graph = co.tear_nonlin_eq(known_vars, solved_vars, self._graph.matches, global_index)
                     tear_mx_vars = [var.mx_var for var in co.block_tear_vars]
 
@@ -1372,10 +1388,6 @@ class BLTModel(object):
                                                    for var in causal_co.mx_vars]]
                             solved_expr.extend([sol[i] for i in range(sol.numel())])
                         else:
-                            # Do not eliminate
-                            for var in causal_co.variables:
-                                self._dependencies[var.name] = 1
-                            
                             n_unsolvable += causal_co.n
                             explicit_unsolved_algebraics.extend([var.mvar for var in causal_co.variables
                                                                  if not var.is_der])
@@ -1398,7 +1410,7 @@ class BLTModel(object):
                                 residuals.extend(res_f.call(causal_co.mx_vars + known_vars + solved_expr))
                                 solved_expr.extend(causal_co.mx_vars)
                             solved_vars.extend(causal_co.mx_vars)
-                    
+
                     n_unsolvable += len(co.block_tear_vars)
                     explicit_unsolved_algebraics.extend([var.mvar for var in co.block_tear_vars if not var.is_der])
                     explicit_unsolved_vars.extend([var.mx_var for var in co.block_tear_vars])
@@ -1426,7 +1438,7 @@ class BLTModel(object):
                     solved_vars.extend(tear_mx_vars)
                 else:
                     for var in co.variables:
-                        self._dependencies[var.name] = 1
+                        self._dependencies[var.name] = [var.name]
                     
                     n_unsolvable += co.n
                     explicit_unsolved_algebraics.extend([var.mvar for var in co.variables if not var.is_der])
@@ -1467,57 +1479,64 @@ class BLTModel(object):
         """
         Check whether system sparsity is sufficiently preserved if block is solved.
         """
-        # Find dependencies
-        block_var_names = [var.getName() for var in co.mx_vars]
+        # We never solve non-scalar blocks, so mark as sparsity preserving for plotting reasons
+        if len(co.variables) > 1:
+            for var in co.variables:
+                self._dependencies[var.name] = [var.name]
+            co.sparsity_preserving = True
+            return True
+        var = co.variables[0]
+
+        # Find untorn dependencies, excluding block variable
         deps = []
         for i in xrange(co.n):
             for vk in ['dx', 'x', 'u', 'w']:
-                for var in self._mx_var_struct[vk]:
-                    if casadi.dependsOn(co.eq_expr[i], [var]) and not var.getName() in block_var_names:
-                        deps.append(var)
+                for dae_var in self._mx_var_struct[vk]:
+                    if casadi.dependsOn(co.eq_expr[i], [dae_var]) and dae_var.getName() != var.name:
+                        deps.append(dae_var)
         deps = list(set(deps))
-        
-        # Count causalized dependencies
-        n_dependencies = 0
+
+        # Find torn dependencies
+        torn_dep_names = []
         for dep in deps:
-            n_dependencies += self._dependencies[dep.getName()]
+            torn_dep_names += self._dependencies[dep.getName()]
+        torn_dep_names = list(set(torn_dep_names))
 
         # Compute density measure
         if self.options['dense_measure'] == 'Markowitz':
+            # Count dependencies
+            n_dependencies = len(torn_dep_names)
+
             # Count incidences
-            n_incidences = 0
-            for var in co.variables:
-                n_incidences = np.max([n_incidences, self._graph.incidences.getcol(var.global_index).getnnz()])
+            n_incidences = self._graph.incidences.getcol(var.global_index).getnnz()
 
             # Compute measure
-            measure = (n_dependencies - 2) * (n_incidences - 1)
-        elif self.options['dense_measure'] == 'Magnusson':
-            # Only treat scalar blocks
-            if len(co.variables) != 1:
-                raise NotImplementedError
-            var = co.variables[0]
-
+            measure = (n_dependencies - 1) * (n_incidences - 1)
+        elif self.options['dense_measure'] == 'lmfi':
             # Compute measure
             measure = 0
-            incidences = self._graph.incidences.getcol(var.global_index).nonzero()[0]
+            incidences = list(self._graph.incidences.getcol(var.global_index).nonzero()[0])
+            incidences.remove(co.equations[0].global_index) # Skip block equation
             if len(incidences) > 1:
+                # Find torn dependencies that cause fill-in
                 for inc in incidences:
+                    inc_torn_dep_names = []
                     for dep in deps:
                         # If dependency causes fill-in
                         if not casadi.dependsOn(self._graph.equations[inc].expression, [dep]):
-                            measure += self._dependencies[dep.getName()]
-                    measure -= 1
-                measure = -1 + measure / np.sqrt(len(incidences) - 1)
+                            inc_torn_dep_names += self._dependencies[dep.getName()]
+                    n_dependencies = len(set(inc_torn_dep_names))
+                    measure += n_dependencies - 1
         else:
             raise ValueError('Unknown density measure %s.' % self.options['dense_measure'])
 
         # Compare measure with tolerance
         if measure >= self.options['dense_tol']:
+            self._dependencies[var.name] = [var.name]
             co.sparsity_preserving = False
             return False
         else:
-            for var in co.variables:
-                self._dependencies[var.name] = n_dependencies
+            self._dependencies[var.name] = torn_dep_names
             co.sparsity_preserving = True
             return True
 
@@ -1698,8 +1717,7 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
             A result object, subclass of algorithm_drivers.ResultBase.
         """
         if algorithm != "LocalDAECollocationAlg":
-            raise ValueError("LocalDAECollocationAlg is the only supported " +
-                             "algorithm.")
+            raise ValueError("LocalDAECollocationAlg is the only supported algorithm.")
         op_res = self._exec_algorithm('pyjmi.jmi_algorithm_drivers', algorithm, options)
 
         # Create result
@@ -1716,8 +1734,9 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
         for key in op_res.keys():
             res[key] = op_res[key]
 
-        # Create function for computing solved algebraics
+        # Add result for solved algebraics
         if len(self._explicit_solved_algebraics) > 0:
+            # Create function for computing solved algebraics
             explicit_solved_expr = []
             for (i, sol_alg) in self._explicit_solved_algebraics:
                 res[sol_alg.name] = []

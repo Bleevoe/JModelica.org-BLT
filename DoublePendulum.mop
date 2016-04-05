@@ -1,0 +1,12 @@
+within DoublePendulum;
+
+optimization Opt(objectiveIntegrand=
+    (pendulum.revolute1.phi-pi/2)^2 + 5*pendulum.revolute2.phi^2 +
+     0.1*pendulum.revolute1.w^2 + 0.1*pendulum.revolute2.w^2 + (u/500)^2)
+	DoublePendulum.DoublePendulum pendulum;
+	constant Real pi = Modelica.Constants.pi;
+	input Real u(min=-500, max=500);
+equation
+    pendulum.u = u;
+end Opt;
+

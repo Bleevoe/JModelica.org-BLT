@@ -17,25 +17,23 @@ import scipy.io as sio
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4", "fourbar1"][4]
+    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4", "fourbar1"][-4]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
     with_opt = True
     #~ with_opt = False
     blt = True
-    #~ blt = False
+    blt = False
     jm_blt = True
     jm_blt = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
     caus_opts['draw_blt'] = True
-    caus_opts['blt_strings'] = False
-    caus_opts['solve_blocks'] = True
-    #~ caus_opts['dense_tol'] = np.inf
-    #~ caus_opts['dense_measure'] = 'Markowitz'
     #~ caus_opts['blt_strings'] = False
-    #~ caus_opts['dense_tol'] = 10
+    caus_opts['solve_blocks'] = False
+    caus_opts['dense_tol'] = 5
+    caus_opts['tearing'] = True
     #~ caus_opts['ad_hoc_scale'] = True
     #~ caus_opts['inline'] = False
     #~ caus_opts['closed_form'] = True
@@ -51,10 +49,11 @@ if __name__ == "__main__":
             file_paths = "simple.mop"
             opts = {'eliminate_alias_variables': True, 'generate_html_diagnostics': True}
             op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
+            #~ op.set('p', 0.0)
 
             #~ caus_opts['uneliminable'] = ["y"]
             opt_opts = op.optimize_options()
-            #~ opt_opts['expand_to_sx'] = "no"
+            opt_opts['IPOPT_options']['linear_solver'] = "ma27"
             caus_opts['linear_solver'] = "symbolicqr"
     elif problem == "triangular":
         uneliminable = []
@@ -70,7 +69,7 @@ if __name__ == "__main__":
             opt_opts = op.optimize_options()
             #~ opt_opts['expand_to_sx'] = "no"
             opt_opts['IPOPT_options']['linear_solver'] = "ma27"
-            caus_opts['linear_solver'] = "symbolicqr"
+            #~ caus_opts['linear_solver'] = "symbolicqr"
     elif problem == "circuit":
         if source == "strings":
             eqs_str = ['$u_0 = \sin(t)$', '$u_1 = R_1 \cdot i_1$',
@@ -84,10 +83,12 @@ if __name__ == "__main__":
                            (4, 3), (4, 4), (5, 0), (5, 1), (5, 2), (6, 1), (6, 2),
                            (6, 3), (7, 5), (7, 6), (8, 6), (8, 7), (8, 8)]
         else:
+            caus_opts['tear_vars'] = ['i3']
+            caus_opts['tear_res'] = [7]
             class_name = "Circuit"
             file_paths = "circuit.mo"
             opts = {'eliminate_alias_variables': False}
-            op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
+            op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts, accept_model=True)
             opt_opts = op.optimize_options()
     elif problem == "vehicle":
         caus_opts['uneliminable'] = ['car.Fxf', 'car.Fxr', 'car.Fyf', 'car.Fyr']
@@ -122,23 +123,23 @@ if __name__ == "__main__":
     elif problem == "double_pendulum":
         uneliminable = []
         
-        caus_opts['tear_vars'] = ['der(boxBody1.body.w_a[3])', 'der(boxBody2.body.w_a[3])']
-        caus_opts['tear_res'] = [50, 115]
+        caus_opts['tear_vars'] = ['der(pendulum.boxBody1.body.w_a[3])', 'der(pendulum.boxBody2.body.w_a[3])']
+        caus_opts['tear_res'] = [51, 115]
+        #~ caus_opts['tear_res'] = [50, 115]
         #~ caus_opts['tear_res'] = [50, 90]
-        #~ caus_opts['tear_res'] = [50]
-        caus_opts['tearing'] = True
         #~ caus_opts['solve_torn_linear_blocks'] = True
-        time_horizon = 5
+        time_horizon = 3
         
         if source != "Modelica":
             raise ValueError
-        class_name = "DoublePendulum_Opt"
-        file_paths = ("double_pendulum.mo", "double_pendulum.mop", "DoublePendulumFeedback.mo")
+        class_name = "Opt"
+        file_paths = ("DoublePendulum.mo", "DoublePendulum.mop")
         opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
                 'expose_temp_vars_in_fmu': True}
         #~ msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
-        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('double_pendulum_sol.txt'))
-        init_fmu = load_fmu(compile_fmu("DoublePendulumFeedback", file_paths, compiler_options=opts))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('Opt_result.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('DoublePendulum_Sim_result.txt'))
+        init_fmu = load_fmu(compile_fmu("DoublePendulum.Feedback", file_paths, compiler_options=opts))
         init_res = init_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
         
         #~ init_op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
@@ -163,7 +164,8 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
         opt_opts['IPOPT_options']['tol'] = 1e-8
         #~ opt_opts['n_e'] = 356
-        opt_opts['n_e'] = 400
+        opt_opts['n_e'] = 100
+        #~ opt_opts['n_e'] = 200
         #~ opt_opts['blocking_factors'] = 100 * [opt_opts['n_e']/100]
     elif problem == "ccpp":
         #~ caus_opts['analyze_var'] = 'der(plant.evaporator.alpha)'
@@ -172,7 +174,8 @@ if __name__ == "__main__":
         #~ caus_opts['tearing'] = True
         #~ caus_opts['linear_solver'] = "lapackqr"
         #~ opt_opts['expand_to_sx'] = "no"
-        caus_opts['tear_vars'] = ['der(plant.evaporator.alpha)']
+        caus_opts['tear_vars'] = ['plant.turbineShaft.T__3']
+        caus_opts['tear_res'] = [123]
         #~ caus_opts['tear_vars'] = ['der(plant.evaporator.p)']
         if source != "Modelica":
             raise ValueError
@@ -191,9 +194,9 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['max_iter'] = 1000
         #~ opt_opts['IPOPT_options']['max_iter'] = 0
         opt_opts['IPOPT_options']['linear_solver'] = "ma27"
-        opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
-        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
-        opt_opts['named_vars'] = True
+        #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
+        #~ opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
+        #~ opt_opts['named_vars'] = True
         #~ opt_opts['IPOPT_options']['tol'] = 1e-3
         #~ opt_opts['IPOPT_options']['dual_inf_tol'] = 1e-3
         #~ opt_opts['IPOPT_options']['constr_viol_tol'] = 1e-3
@@ -267,49 +270,51 @@ if __name__ == "__main__":
         opt_opts['n_e'] = 20
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = 10
-        opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['mu_init'] = 1e-3
     elif problem == "fourbar1":
-        uneliminable = []
-        
-        #~ caus_opts['tear_vars'] = ['der(boxBody1.body.w_a[3])', 'der(boxBody2.body.w_a[3])']
-        #~ caus_opts['tear_res'] = [50, 90]
-        #~ caus_opts['tearing'] = True
-        #~ caus_opts['solve_torn_linear_blocks'] = True
-        time_horizon = 5
+        uneliminable = ['fourbar1.j2.s', 'fourbar1.j2.v']
+        caus_opts['uneliminable'] = uneliminable
+        caus_opts['tear_vars'] = [
+                'fourbar1.j4.phi', 'fourbar1.j3.phi', 'fourbar1.rev.phi', 'fourbar1.rev1.phi', 'fourbar1.j5.phi',
+                'der(fourbar1.rev.phi)', 'der(fourbar1.rev1.phi)', 'temp_2962', 'der(fourbar1.j5.phi)', 'temp_2943',
+                'der(fourbar1.rev.phi,2)', 'der(fourbar1.b3.body.w_a[3])', 'der(fourbar1.j4.phi,2)',
+                        'der(fourbar1.j5.phi,2)', 'temp_3160', 'temp_3087',
+                        'fourbar1.b3.frame_a.t[1]', 'fourbar1.b3.frame_a.f[1]']
+        #~ caus_opts['tear_res'] = [160, 161, 125, 162, 124,
+                                 #~ 349, 335, 285, 237, 200,
+                                 #~ 82, 377, 389, 334, 336, 362, 238, 236]
+        caus_opts['tear_res'] = [160, 161, 125, 162, 124,
+                                 370, 356, 306, 258, 221,
+                                 79, 398, 383, 411, 357, 355, 257, 259]
+        time_horizon = 1
         
         if source != "Modelica":
             raise ValueError
-        class_name = "Fourbar1"
-        file_path = "msl.mop"
-        opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
+        class_name = "Fourbar1.Fourbar1Feedback"
+        file_paths = ("Fourbar1.mo", "Fourbar1.mop")
+        compiler_opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
                 'expose_temp_vars_in_fmu': True}
-        msl_fourbar1 = "Modelica.Mechanics.MultiBody.Examples.Loops.Fourbar1"
-        fmu = load_fmu(compile_fmu(msl_fourbar1, compiler_options=opts))
-        init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
+        #~ fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=compiler_opts))
+        #~ init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
+        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_opt_init.txt'))
         
-        #~ init_op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
-        #~ init_op.set('finalTime', time_horizon)
-        
-        #~ opt_opts = init_op.optimize_options()
-        #~ opt_opts['init_traj'] = init_res
-        #~ opt_opts['nominal_traj'] = init_res
-        #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
-        #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
-        #~ opt_opts['n_e'] = 350
-        #~ if blt:
-            #~ init_op = sp.BLTOptimizationProblem(init_op, caus_opts)
-        #~ init_res = init_op.optimize(options=opt_opts)
-        
-        op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
+        compiler_opts['generate_html_diagnostics'] = False
+        class_name_opt = "Fourbar1_Opt"
+        op = transfer_optimization_problem(class_name_opt, file_paths, compiler_options=compiler_opts)
         op.set('finalTime', time_horizon)
         opt_opts = op.optimize_options()
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
+        opt_opts['nominal_traj_mode'] = {'_default_mode': "time-variant"}
         opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        #~ opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
-        #~ opt_opts['n_e'] = 356
-        opt_opts['n_e'] = 200
+        opt_opts['IPOPT_options']['max_iter'] = 1500
+        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-3
+        opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        
+        opt_opts['n_e'] = 60
     else:
         raise ValueError("Unknown problem %s." % problem)
 
@@ -427,31 +432,31 @@ if __name__ == "__main__":
                 plt.show()
         elif problem == "double_pendulum":
             init_time = init_res['time']
-            init_phi1 = init_res['revolute1.phi']
-            init_phi2 = init_res['revolute2.phi']
-            init_r1 = init_res['boxBody1.r[1]'][0]
-            init_r2 = init_res['boxBody2.r[1]'][0]
+            init_phi1 = init_res['pendulum.revolute1.phi']
+            init_phi2 = init_res['pendulum.revolute2.phi']
+            init_r1 = init_res['pendulum.boxBody1.r[1]'][0]
+            init_r2 = init_res['pendulum.boxBody2.r[1]'][0]
             init_x1 = init_r1*cos(init_phi1)
             init_y1 = init_r1*sin(init_phi1)
             init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
             init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
             time = res['time']
-            phi1 = res['revolute1.phi']
-            phi2 = res['revolute2.phi']
-            r1 = res['boxBody1.r[1]'][0]
-            r2 = res['boxBody2.r[1]'][0]
+            phi1 = res['pendulum.revolute1.phi']
+            phi2 = res['pendulum.revolute2.phi']
+            r1 = res['pendulum.boxBody1.r[1]'][0]
+            r2 = res['pendulum.boxBody2.r[1]'][0]
             x1 = r1*cos(phi1)
             y1 = r1*sin(phi1)
             x2 = x1 + r2*cos(phi1 + phi2)
             y2 = y1 + r2*sin(phi1 + phi2)
-            sim_fmu = load_fmu(compile_fmu("DoublePendulum", file_paths))
+            sim_fmu = load_fmu(compile_fmu("DoublePendulum.Sim", file_paths))
             sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
                                        input=res.get_opt_input())
             sim_time = sim_res['time']
-            sim_phi1 = sim_res['revolute1.phi']
-            sim_phi2 = sim_res['revolute2.phi']
-            sim_r1 = sim_res['boxBody1.r[1]'][0]
-            sim_r2 = sim_res['boxBody2.r[1]'][0]
+            sim_phi1 = sim_res['pendulum.revolute1.phi']
+            sim_phi2 = sim_res['pendulum.revolute2.phi']
+            sim_r1 = sim_res['pendulum.boxBody1.r[1]'][0]
+            sim_r2 = sim_res['pendulum.boxBody2.r[1]'][0]
             sim_x1 = sim_r1*cos(sim_phi1)
             sim_y1 = sim_r1*sin(sim_phi1)
             sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
@@ -489,13 +494,6 @@ if __name__ == "__main__":
                 plt.legend(['$u$ init', '$u$ opt'])
                 
                 plt.show()
-        elif problem == "fourbar1":
-            time = res['time']
-            rev2angle = res['revolute2.angle']
-            if with_plots:
-                 plt.close(1)
-                 plt.figure(1)
-                 plt.plot(time, rev2angle)
         elif problem == "ccpp":
             init_sim_plant_p = res['plant.evaporator.p']
             init_sim_plant_sigma = res['plant.sigma']
@@ -662,12 +660,45 @@ if __name__ == "__main__":
                 plot_solution(opt_t, opt_T_28, opt_T_14, opt_Q, opt_L_vol, 5,
                               'Optimal control')
         elif problem == "fourbar1":
+            sim_fmu = load_fmu(compile_fmu("Fourbar1.Fourbar1Sim", file_paths, compiler_options=compiler_opts))
+            sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
+                                       input=res.get_opt_input())
+            sim_time = sim_res['time']
+            sim_s = sim_res['fourbar1.j2.s']
+            sim_phi = sim_res['fourbar1.j1.phi']
+            sim_u = sim_res['u']
+
+            init_time = init_res['time']
+            init_s = init_res['fourbar1.j2.s']
+            init_phi = init_res['fourbar1.j1.phi']
+            init_u = init_res['u']
+            
             time = res['time']
-            revphi = res['rev.phi']
+            s = res['fourbar1.j2.s']
+            phi = res['fourbar1.j1.phi']
+            u = res['u']
             if with_plots:
                  plt.close(1)
                  plt.figure(1)
-                 plt.plot(time, revphi)
+                 plt.subplot(3, 1, 1)
+                 plt.plot(time, s)
+                 plt.plot(sim_time, sim_s)
+                 plt.plot(init_time, init_s)
+                 plt.xlabel('$t$')
+                 plt.ylabel('$s$')
+                 plt.subplot(3, 1, 2)
+                 plt.plot(time, phi)
+                 plt.plot(sim_time, sim_phi)
+                 plt.plot(init_time, init_phi)
+                 plt.xlabel('$t$')
+                 plt.ylabel('$\phi$')
+                 plt.subplot(3, 1, 3)
+                 plt.plot(time, u)
+                 plt.plot(sim_time, sim_u)
+                 plt.plot(init_time, init_u)
+                 plt.xlabel('$t$')
+                 plt.ylabel('$u$')
+                 plt.legend(['Opt', 'Sim', 'Init'], loc=1)
                  plt.show()
         else:
             raise ValueError("Unknown problem %s." % problem)
