@@ -717,7 +717,7 @@ class BipartiteGraph(object):
                 plt.plot([i_new, i_new], [-i, -i_new], color, lw=lw)
                 i = i_new - offset + 1
             for edge in self.edges:
-                ms = 100.0 / self.n ** 0.7
+                ms = 100.0 / self.n ** 0.73
                 if edge.var.is_der:
                     marker='d'
                     mew = 2
@@ -1071,15 +1071,18 @@ class BLTModel(object):
         pars = reduce(list.__add__, [list(model.getVariables(par_kind)) for
                                      par_kind in par_kinds])
 
-        # Remove free parameters
-        pars = filter(lambda par: not model.get_attr(par, "free"), pars)
-        mvar_vectors['p'] = pars
-        n_var['p'] = len(mvar_vectors['p'])
+        # Sort free/fixed parameters
+        fixed_pars = filter(lambda par: not model.get_attr(par, "free"), pars)
+        free_pars = filter(lambda par: model.get_attr(par, "free"), pars)
+        mvar_vectors['p_fixed'] = fixed_pars
+        n_var['p_fixed'] = len(mvar_vectors['p_fixed'])
+        mvar_vectors['p_opt'] = free_pars
+        n_var['p_opt'] = len(mvar_vectors['p_opt'])
 
         # Get parameter values
         model.calculateValuesForDependentParameters()
-        par_vars = [par.getVar() for par in mvar_vectors['p']]
-        par_vals = [model.get_attr(par, "_value") for par in mvar_vectors['p']]
+        par_vars = [par.getVar() for par in mvar_vectors['p_fixed']]
+        par_vals = [model.get_attr(par, "_value") for par in mvar_vectors['p_fixed']]
 
         # Get optimization and model expressions
         named_initial = model.getInitialResidual()
@@ -1090,7 +1093,7 @@ class BLTModel(object):
 
         # Create named symbolic variable structure
         mx_var_struct["time"] = [model.getTimeVariable()]
-        for vk in ["dx", "x", "u", "w"]:
+        for vk in ["dx", "x", "u", "w", "p_opt"]:
             mx_var_struct[vk] = [mvar.getVar() for mvar in mvar_vectors[vk]]
 
         # Create variables
@@ -1142,7 +1145,8 @@ class BLTModel(object):
         x = mx_var_struct['x']
         u = mx_var_struct['u']
         w = mx_var_struct['w']
-        self._known_vars = known_vars = time + x + u
+        p = mx_var_struct['p_opt']
+        self._known_vars = known_vars = time + x + u + p
         options = self.options
         if options['closed_form']:
             sx_time = [casadi.SX.sym("time")]
@@ -1563,6 +1567,12 @@ class BLTModel(object):
         else:
             return self._model.getVariables(vk)
 
+    def set(self, *args):
+        self._model.set(*args)
+
+    def get(self, *args):
+        return self._model.get(*args)
+
     def getAliases(self):
         return np.array([var for var in self._model.getAliases() if var.getModelVariable() not in self._solved_algebraics_mvar])
 
@@ -1730,6 +1740,8 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
                 return self._op_res.result_data.get_variable_data(name)
             def get_opt_input(self):
                 return self._op_res.get_opt_input()
+            def get_solver_statistics(self):
+                return self._op_res.get_solver_statistics()
         res = BLTResult(op_res)
         for key in op_res.keys():
             res[key] = op_res[key]
