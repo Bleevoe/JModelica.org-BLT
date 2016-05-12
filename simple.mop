@@ -1,14 +1,25 @@
 model Simple
-    Real x(start=0.1, fixed=true);
-    Real y(min=-0.1);
-    parameter Real p = 1;
+    Real x(start=1, fixed=true);
+    Real y;
+    Real z;
+    input Real u(min=-5, max=5);
 equation
-    der(x) = x + y;
-    (p-x)*y + x = 1;
+	der(x) = x + y + z + u;
+    der(y) = y + z;
+    y = time;
 end Simple;
 
-optimization Simple_Opt(finalTime=0.6)
+model Simplest
+    Real x(start=1, fixed=true);
+    input Real u(min=-5, max=5);
+equation
+	der(x) = time + x + u;
+end Simplest;
+
+optimization Simple_Opt(objective=finalTime, finalTime(free=true, initialGuess=1, min=0))
     extends Simple;
+constraint
+	x(finalTime) = 0;
 end Simple_Opt;
 
 function p2_fcn

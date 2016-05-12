@@ -42,20 +42,26 @@ package DoublePendulum "MSL Double pendulum"
     inner Modelica.Mechanics.MultiBody.World world annotation (Placement(
           transformation(extent={{-88,0},{-68,20}}, rotation=0)));
     Modelica.Mechanics.MultiBody.Joints.Revolute revolute1(useAxisFlange=true,
-        w(fixed=true),
       phi(
         fixed=true,
         displayUnit="deg",
-        start=-1.5707963267949))                                   annotation (Placement(transformation(extent={{-48,0},
+        start=-0.78539816339745),
+      w(
+        fixed=true,
+        start=-0.78539816339745,
+        displayUnit="deg/s"))                                      annotation (Placement(transformation(extent={{-48,0},
               {-28,20}}, rotation=0)));
     Modelica.Mechanics.Rotational.Components.Damper damper(d=0.1)
       annotation (Placement(transformation(extent={{-48,40},{-28,60}}, rotation=0)));
     Modelica.Mechanics.MultiBody.Parts.BodyBox boxBody1(r={0.5,0,0}, width=0.06)
       annotation (Placement(transformation(extent={{-10,0},{10,20}}, rotation=0)));
-    Modelica.Mechanics.MultiBody.Joints.Revolute revolute2(                 w(
-          fixed=true),
+    Modelica.Mechanics.MultiBody.Joints.Revolute revolute2(
       useAxisFlange=false,
-      phi(fixed=true, start=0))                            annotation (Placement(transformation(extent={{32,0},{
+      phi(fixed=true, start=-0.78539816339745),
+      w(
+        fixed=true,
+        displayUnit="deg/s",
+        start=-0.78539816339745))                          annotation (Placement(transformation(extent={{32,0},{
               52,20}}, rotation=0)));
     Modelica.Mechanics.MultiBody.Parts.BodyBox boxBody2(r={0.5,0,0}, width=0.06)
       annotation (Placement(transformation(extent={{74,0},{94,20}}, rotation=0)));

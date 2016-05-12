@@ -1774,3 +1774,19 @@ class BLTOptimizationProblem(BLTModel, ModelBase):
         # Return result
         res.solver = op_res.solver
         return res
+
+    def prepare_optimization(self, algorithm='LocalDAECollocationPrepareAlg', options={}):
+        """
+        Prepare the solution of an optimization problem.
+
+        The arguments are the same as for the optimize method.
+
+        Returns::
+
+            A solver object that can be used to solve the problem and change settings.
+        """
+        if algorithm != "LocalDAECollocationPrepareAlg":
+            raise ValueError("LocalDAECollocationPrepareAlg is the only supported " +
+                             "algorithm.")
+        return self._exec_algorithm('pyjmi.jmi_algorithm_drivers',
+                                    algorithm, options)
