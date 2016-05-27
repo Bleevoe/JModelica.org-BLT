@@ -20,10 +20,10 @@ if __name__ == "__main__":
     plt.rcParams.update({'text.usetex': False})
     #~ problems = ["ccpp"]
     #~ problems = ["vehicle"]
-    #~ problems = ["fourbar1"]
+    problems = ["fourbar1"]
     #~ problems = ["dist4"]
-    problems = ["double_pendulum"]
-    #~ problems = ["hrsg"]
+    #~ problems = ["double_pendulum"]
+    #~ problems = ["hrsg_marcus"]
     #~ problems = ["dist4", "fourbar1"]
     schemes = {}
     #~ schemes['dist4'] = ["0", "1", "2.02", "2.03", "2.05", "2.10", "2.20"]
@@ -34,6 +34,7 @@ if __name__ == "__main__":
     #~ schemes['dist4'] = ["0"]
     #~ schemes['fourbar1'] = ["0", "1", "2.05", "2.10", "3",
                            #~ "4.03", "4.05", "4.10", "4.15", "4.20", "4.25", "4.40", "4.50"]
+    schemes['fourbar1'] = ["4.03", "4.05", "4.10", "4.15", "4.20", "4.25", "4.40", "4.50"]
     #~ schemes['fourbar1'] = ["0", "1", "2.05", "2.10", "3",
                            #~ "4.20", "4.25", "4.40", "4.50"]
     #~ schemes['fourbar1'] = ["0"]
@@ -42,11 +43,14 @@ if __name__ == "__main__":
     #~ schemes["ccpp"] = ["1", "2.05", "3", "4.05"]
     #~ schemes["vehicle"] = ["0", "1", "2.05"]
     #~ schemes["vehicle"] = ["0"]
-    schemes['double_pendulum'] = ["0", "1", "2.02", "2.03", "3", "4.02", "4.03", "4.05"]
+    #~ schemes['double_pendulum'] = ["0", "1", "2.02", "2.03", "3", "4.02", "4.03", "4.05"]
     #~ schemes['double_pendulum'] = ["0", "1", "3"]
     #~ schemes['hrsg'] = ["0", "1", "3", "4.02", "4.04"]
     #~ schemes['hrsg'] = ["0", "1", "3", "4.04"]
     #~ schemes['hrsg'] = ["3"]
+    #~ schemes['hrsg_marcus'] = ["0", "1", "3", "4.05"]
+    #~ schemes['hrsg_marcus'] = ["0", "1", "3"]
+    #~ schemes['hrsg_marcus'] = ["4.05"]
     ops = {}
     solvers = {}
     n_algs = {}
@@ -65,7 +69,11 @@ if __name__ == "__main__":
     for problem in problems:
         opt_opts = {}
         opt_opts['IPOPT_options'] = {}
-        opt_opts['IPOPT_options']['acceptable_tol'] = 1e-8
+        opt_opts['IPOPT_options']['acceptable_iter'] = 10000
+        opt_opts['IPOPT_options']['acceptable_tol'] = 1e-12
+        opt_opts['IPOPT_options']['acceptable_constr_viol_tol'] = 1e-12
+        opt_opts['IPOPT_options']['acceptable_dual_inf_tol'] = 1e-12
+        opt_opts['IPOPT_options']['acceptable_compl_inf_tol'] = 1e-12
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
@@ -547,32 +555,34 @@ if __name__ == "__main__":
             ops[problem][scheme] = op
             solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
             n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-        elif problem == "hrsg":
-            std_dev[problem] = 0.1
+        elif problem == "hrsg_marcus":
+            std_dev[problem] = 0.3
+            #~ std_dev[problem] = 1e-15
             caus_opts = sp.CausalizationOptions()
             caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
-            caus_opts['tear_vars'] = ['sys.bypassValveRH.dp', 'sys.bypassValveRH1.dp',
-                                      'sys.evaporator.h_gas_out',
-                                      'sys.SH2.h_water_in', 'sys.RH.h_water_in', 'sys.headerWall_SH.T0', 'sys.RH.h_water_out', 'sys.SH1.h_gas_in', 'sys.SH2.h_water_out', 'sys.SH2.h_gas_out', 'sys.SH1.h_gas_out',
-                                      'sys.headerWall_RH.T0', 'sys.headerRH.h_water_out']
-            caus_opts['tear_res'] = [15, 25,
-                                     18,
-                                     68, 67, 52, 53, 43, 44, 35, 34,
-                                     #~ 77, 67, 52, 53, 43, 44, 35, 34,
-                                     71, 70]
-            init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_sol.txt'))
+            caus_opts['tear_vars'] = [
+                'sys.evaporator.h_gas_out',
+                'sys.bypassValveRH1.outlet.p', 'sys.bypassValveRH1.dp', 'sys.Valve1.dp', 'sys.Valve4.dp',
+                    'sys.Valve2.dp', 'sys.SH2.h_water_in', 'sys.SH2.h_water_out', 'sys.headerSH.h_water_out',
+                    'sys.bypassValveRH.dp', 'sys.headerWall_SH.T0', 'sys.RH.h_water_out', 'sys.SH1.h_gas_in',
+                    'sys.SH2.h_gas_out', 'sys.SH1.h_gas_out',
+                'sys.headerWall_RH.T0', 'sys.headerRH.h_water_out']
+            caus_opts['tear_res'] = [18,
+                                     68, 62, 65, 71, 52, 53, 44, 43, 35, 34, 70, 98, 15, 58,
+                                     74, 73]
+            init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_sol.txt'))
             class_name = "HeatRecoveryOptim.Plant_optim"
-            file_paths = ['OCTTutorial','HeatRecoveryOptim.mop']
+            file_paths = ['hrsg_marcus/HeatRecoveryOptim.mop']
+            extra_lib_dirs = ['/work/fredrikm/JModelica.org-BLT/hrsg_marcus']
             compiler_opts = {'generate_html_diagnostics': True, 'state_initial_equations': True,
-                             'inline_functions': 'none', 'dynamic_states': False}
+                             'inline_functions': 'none', 'dynamic_states': False, 'extra_lib_dirs': extra_lib_dirs}
             op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
             opt_opts['init_traj'] = init_res
             opt_opts['nominal_traj'] = init_res
-            opt_opts['IPOPT_options']['max_cpu_time'] = 30
-            opt_opts['IPOPT_options']['linear_solver'] = "ma27"
-            opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
-            #~ opt_opts['IPOPT_options']['ma97_umax'] = 1e-2
+            #~ opt_opts['result_file_name'] = "result_temp.txt"
+            opt_opts['IPOPT_options']['max_cpu_time'] = 60
             opt_opts['n_cp'] = 5
+            opt_opts['n_e'] = 25
 
             # Set up FMU to check initial state feasibility
             fmu = load_fmu(compile_fmu('HeatRecoveryOptim.Plant_control', file_paths,
@@ -610,20 +620,10 @@ if __name__ == "__main__":
             solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
             n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
             
-            # Scheme 4.02
-            scheme = "4.02"
+            # Scheme 4.05
+            scheme = "4.05"
             op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-            caus_opts['dense_tol'] = 2
-            caus_opts['tearing'] = True
-            op = sp.BLTOptimizationProblem(op, caus_opts)
-            ops[problem][scheme] = op
-            solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-            n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-            
-            # Scheme 4.04
-            scheme = "4.04"
-            op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-            caus_opts['dense_tol'] = 4
+            caus_opts['dense_tol'] = 5
             caus_opts['tearing'] = True
             op = sp.BLTOptimizationProblem(op, caus_opts)
             ops[problem][scheme] = op
@@ -640,7 +640,7 @@ if __name__ == "__main__":
 
         # Perturb initial state
         np.random.seed(1)
-        n_runs = 2000
+        n_runs = 50
         op0 = ops[problem].values()[0] # Get arbitrary OP to compute min and max
         x_vars = op0.getVariables(op.DIFFERENTIATED)
         x_names = [x_var.getName() for x_var in x_vars]
@@ -675,6 +675,19 @@ if __name__ == "__main__":
                     else:
                         dT = np.array(fmu.get(['dT_SH2', 'dT_RH']))
                         if all(dT < 18):
+                            feasible = True
+                        else:
+                            feasible = False
+                elif problem == "hrsg_marcus":
+                    fmu.reset()
+                    fmu.set(['_start_' + name for name in  x_names], x0_pert_proj)
+                    try:
+                        fmu.initialize()
+                    except:
+                        feasible = False
+                    else:
+                        dT = np.array(fmu.get(['dT_SH2', 'dT_RH']))
+                        if all(dT < 0.9*15):
                             feasible = True
                         else:
                             feasible = False

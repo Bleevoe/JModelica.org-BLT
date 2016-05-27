@@ -500,7 +500,7 @@ class Component(object):
         if not self.block_tear_vars:
             raise RuntimeError("Torn block has no tearing variables (bug?)")
         res = casadi.vertcat(self.eq_expr)
-        all_vars = self.mx_vars + known_vars + solved_vars 
+        all_vars = self.mx_vars + known_vars + solved_vars
 
         # Sort causal and tearing equations
         tearing_variables = self.block_tear_vars
@@ -1164,6 +1164,20 @@ class BLTModel(object):
             self._graph.draw(13)
             self._graph.draw_blt(98, True)
 
+        #~ for comp in self._graph.components:
+            #~ if 'temp_3087' in [var.name for var in comp.variables]:
+            #~ if 'i3' in [var.name for var in comp.variables]:
+                #~ A = np.zeros([comp.n, comp.n])
+                #~ n0 = comp.equations[0].global_blt_index
+                #~ for edge in self._graph.edges:
+                    #~ i = edge.eq.global_blt_index - n0
+                    #~ j = edge.var.global_blt_index - n0
+                    #~ if (0 <= i < comp.n and 0 <= j < comp.n):
+                        #~ A[i, j] = 2 - edge.linear
+        #~ from tearing import tear
+        #~ tear(A)
+        #~ dh()
+
         # Create expression
         residuals = []
         self._solved_vars = solved_vars = []
@@ -1340,7 +1354,7 @@ class BLTModel(object):
                     for causal_co in co.causal_graph.components:
                         # Eliminate causal variable
                         if self._sparsity_preserving(causal_co):
-                            causal_co.create_lin_eq(known_vars, solved_vars, [var.mx_var for var in co.block_tear_vars])
+                            causal_co.create_lin_eq(known_vars, solved_vars, tear_mx_vars)
                             
                             # Compute A
                             if options['closed_form']:
@@ -1356,11 +1370,11 @@ class BLTModel(object):
                             # Block variables need a (any) real value in order to find b
                             if options['closed_form']:
                                 if options['inline_solved']:
-                                    something = []
+                                    something = [] # tear_sx_vars
                                     b_input = causal_co.n * [1.] + sx_known_vars + solved_expr + something
                                     dh() # TODO: something
                                 else:
-                                    something = []
+                                    something = [] # tear_sx_vars
                                     b_input = causal_co.n * [1.] + sx_known_vars + sx_solved_vars + something
                                     dh() # TODO: something
                             else:
@@ -1399,7 +1413,7 @@ class BLTModel(object):
                             if options['closed_form']:
                                 # Create SX residual
                                 res = casadi.vertcat(causal_co.eq_expr)
-                                all_vars = causal_co.mx_vars + known_vars + solved_vars 
+                                all_vars = causal_co.mx_vars + known_vars + solved_vars + tear_mx_vars
                                 res_f = casadi.MXFunction(all_vars , [res])
                                 res_f.init()
                                 sx_res = casadi.SXFunction(res_f)
@@ -1408,10 +1422,11 @@ class BLTModel(object):
                                 solved_expr.extend(causal_co.sx_vars)
                             else:
                                 res = casadi.vertcat(causal_co.eq_expr)
-                                all_vars = causal_co.mx_vars + known_vars + solved_vars 
+                                all_vars = causal_co.mx_vars + known_vars + solved_vars + tear_mx_vars
                                 res_f = casadi.MXFunction(all_vars , [res])
                                 res_f.init()
-                                residuals.extend(res_f.call(causal_co.mx_vars + known_vars + solved_expr))
+                                residuals.extend(res_f.call(causal_co.mx_vars + known_vars +
+                                                            solved_expr + tear_mx_vars))
                                 solved_expr.extend(causal_co.mx_vars)
                             solved_vars.extend(causal_co.mx_vars)
 

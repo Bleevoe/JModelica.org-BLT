@@ -17,21 +17,23 @@ import scipy.io as sio
 if __name__ == "__main__":
     # Define problem
     plt.rcParams.update({'text.usetex': False})
-    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "dist4", "fourbar1"][-2]
+    problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "hrsg_marcus",
+               "dist4", "fourbar1"][-1]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
     with_opt = True
     #~ with_opt = False
     blt = True
-    blt = False
+    #~ blt = False
     jm_blt = True
     jm_blt = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
-    caus_opts['draw_blt'] = True
-    caus_opts['blt_strings'] = False
+    #~ caus_opts['draw_blt'] = True
+    #~ caus_opts['blt_strings'] = False
     caus_opts['solve_blocks'] = False
+    #~ caus_opts['dense_tol'] = 5
     caus_opts['dense_tol'] = np.inf
     caus_opts['tearing'] = True
     #~ caus_opts['ad_hoc_scale'] = True
@@ -173,7 +175,7 @@ if __name__ == "__main__":
     elif problem == "ccpp":
         #~ caus_opts['analyze_var'] = 'der(plant.evaporator.alpha)'
         caus_opts['uneliminable'] = ['plant.sigma']
-        caus_opts['uneliminable'] += ['der(plant.evaporator.alpha)']
+        #~ caus_opts['uneliminable'] += ['der(plant.evaporator.alpha)']
         #~ caus_opts['tearing'] = True
         #~ caus_opts['linear_solver'] = "lapackqr"
         #~ opt_opts['expand_to_sx'] = "no"
@@ -242,11 +244,67 @@ if __name__ == "__main__":
         opt_opts = op.optimize_options()
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
-        opt_opts['n_e'] = 50
+        #~ opt_opts['n_e'] = 55
         opt_opts['n_cp'] = 5
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
+        opt_opts['IPOPT_options']['acceptable_tol'] = 1e-8
         #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         #~ opt_opts['IPOPT_options']['mu_init'] = 1e-9
+    elif problem == "hrsg_marcus":
+        caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
+        caus_opts['tear_vars'] = [
+            'sys.evaporator.h_gas_out',
+            'sys.bypassValveRH1.outlet.p', 'sys.bypassValveRH1.dp', 'sys.Valve1.dp', 'sys.Valve4.dp',
+                'sys.Valve2.dp', 'sys.SH2.h_water_in', 'sys.SH2.h_water_out', 'sys.headerSH.h_water_out',
+                'sys.bypassValveRH.dp', 'sys.headerWall_SH.T0', 'sys.RH.h_water_out', 'sys.SH1.h_gas_in',
+                'sys.SH2.h_gas_out', 'sys.SH1.h_gas_out',
+            'sys.headerWall_RH.T0', 'sys.headerRH.h_water_out']
+        caus_opts['tear_res'] = [18,
+                                 68, 62, 65, 71, 52, 53, 44, 43, 35, 34, 70, 98, 15, 58,
+                                 74, 73]
+        #~ caus_opts['tearing'] = True
+        #~ caus_opts['dense_measure'] = 'Markowitz'
+        #~ caus_opts['dense_tol'] = 15
+                
+        if source != "Modelica":
+            raise ValueError
+        class_name = "HeatRecoveryOptim.Plant_optim"
+        file_paths = ['hrsg_marcus/HeatRecoveryOptim.mop']
+        extra_lib_dirs = ['/work/fredrikm/JModelica.org-BLT/hrsg_marcus']
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_init.txt'))
+        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_sol2.txt'))
+        opts = {'generate_html_diagnostics': True, 'state_initial_equations': True, 'inline_functions': 'none',
+                'equation_sorting': jm_blt, 'extra_lib_dirs': extra_lib_dirs}
+        op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
+
+        # Initial conditions
+        for var in op.getAllVariables():
+             name = var.getName()
+             if name.startswith('_start_'):
+                 value = init_res.result_data.get_variable_data(name[7:]).x[0]
+                 op.set(name, value)
+        
+        opt_opts = op.optimize_options()
+        opt_opts['init_traj'] = init_res
+        opt_opts['nominal_traj'] = init_res
+        opt_opts['named_vars'] = True
+        opt_opts['n_e'] = 25
+        ne = opt_opts['n_e']
+        #~ opt_opts['hs'] = 3*ne/4*[2./3./ne] + ne/4*[2./ne]
+        opt_opts['n_cp'] = 5
+        opt_opts['IPOPT_options']['linear_solver'] = "ma57"
+        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
+        opt_opts['IPOPT_options']['bound_frac'] = 1e-10
+        opt_opts['IPOPT_options']['bound_push'] = 1e-10
+        #~ opt_opts['IPOPT_options']['max_iter'] = 0
+        
+        opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
+        #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-2
+        
+        #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['IPOPT_options']['mu_init'] = 1e-5
     elif problem == "dist4":
         caus_opts['uneliminable'] = ['Dist', 'Bott']
         #~ uneliminable += ['ent_term_A[%d]' % i for i in range(1, 43)] + ['ent_term_B[%d]' % i for i in range(1, 43)]
@@ -318,7 +376,6 @@ if __name__ == "__main__":
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-3
-        opt_opts['IPOPT_options']['max_iter'] = 1500
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-3
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
@@ -542,7 +599,7 @@ if __name__ == "__main__":
                 plt.ylabel('input load [1]')
                 plt.xlabel('time [s]')
                 plt.show()
-        elif problem == "hrsg":
+        elif problem == "hrsg" or problem == "hrsg_marcus":
             Tgasin=res['sys.gasSource.T']
             uRHP=res['sys.valve_integrator_RH.y']
             uSHP=res['sys.valve_integrator_SH.y']
@@ -728,4 +785,15 @@ if __name__ == "__main__":
                
 
         solver = res.solver
+
+        c_MX_fcn = casadi.MXFunction([solver.xx, solver.pp], [casadi.vertcat([solver.c_e, solver.c_i])])
+        c_MX_fcn.init()
+        c_fcn = casadi.SXFunction(c_MX_fcn)
+        c_fcn.init()
+        c_fcn.setInput(solver.xx_init, 0)
+        c_fcn.setInput(solver._par_vals, 1)
+        c_fcn.evaluate()
+        inf = c_fcn.output().toArray().reshape(-1)
+        np.where(abs(inf) > 1e2)
+        sum(abs(inf) > 1000)
 
