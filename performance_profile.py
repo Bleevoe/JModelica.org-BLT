@@ -3,50 +3,79 @@ from IPython.core.debugger import Tracer; dh = Tracer()
 from scipy.stats import norm
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 
-stats_files = ['stats_stwf_10', 'stats_ccpp_30', 'stats_dist4_20', 'stats_double_pendulum_30']
-#~ stats_files = ['stats_stwf_10', 'stats_ccpp_30', 'stats_fourbar1_5', 'stats_dist4_20', 'stats_double_pendulum_30']
-#~ stats_files = ['stats_fourbar1_5']
-max_times = {'stats_stwf_10': 30,
-             'stats_ccpp_30': 10,
-             'stats_fourbar1_5': 40,
-             'stats_dist4_20': 60,
-             'stats_double_pendulum_30': 40}
-rm = np.inf
-schemes =       ["0" , "1" ,"2.20",  "2.10", "2.05", "3", "4.20", "4.10", "4.05"]
-scheme_styles = ["r-", "y-", "y--" , "y-." , "y:",  "b", "b--" , "b-." , "b:"]
+stats_files = ['stats_stwf_10', 'stats_ccpp_30', 'stats_fourbar1_3', 'stats_dist4_20', 'stats_double_pendulum_30', 'stats_hrsg_marcus_30']
+#~ stats_files =   ['stats_fourbar1_3']
+schemes =       ["0" , "1"  ,  "3", "2.40"  , "2.30"  , "2.20"  , "2.10"  , "2.05"  , "4.40"   , "4.30"  , "4.20"  , "4.10"  , "4.05"]
+scheme_labels = ["0" , "1"  ,  "2", "3_{40}", "3_{30}", "3_{20}", "3_{10}", "3_{05}", "4_{40}" , "4_{30}", "4_{20}", "4_{10}", "4_{5}"]
+schm_clr_idxs = [0,        0,    0,      1  ,        2,        3,        4,        5,      1   ,        2,        3,        4,        5]
+scheme_styles = ["-" , "--" , "-.", "--"    , "--"    , "--"    , "--"    , "--"    , "-."     , "-."    , "-."    , "-."    , "-."]
+scheme_labels = map(lambda s: "$" + s + "$", scheme_labels)
+scheme_idxs = range(len(schemes))
+#~ scheme_idxs = [0, 1, 2, 4, 9]
+
+if len(scheme_idxs) != len(schemes):
+    scheme_styles = ['-', '-', '-', '--', '--']
+    schm_clr_idxs = [0, 2, 5, 2, 5]
+
+cNorm = matplotlib.colors.Normalize(vmin=0, vmax=6)
+scalarMap = plt.cm.ScalarMappable(norm=cNorm, cmap='nipy_spectral')
+scheme_colors = map(scalarMap.to_rgba, schm_clr_idxs)
+
+#~ scheme_styles = ["r-", "y-", "y--" , "y-." , "y:",  "b", "b--" , "b-." , "b:"]
 
 statses = dict(zip(stats_files, [pickle.load(open(stats_file, "rb")).values()[0] for stats_file in stats_files]))
 if "stats_stwf_10" in stats_files:
-    statses["stats_stwf_10"]["2.10"] = statses["stats_stwf_10"]["1"]
+    statses["stats_stwf_10"]["2.10"] = statses["stats_stwf_10"]["2.05"]
     statses["stats_stwf_10"]["2.20"] = statses["stats_stwf_10"]["1"]
+    statses["stats_stwf_10"]["2.30"] = statses["stats_stwf_10"]["1"]
+    statses["stats_stwf_10"]["2.40"] = statses["stats_stwf_10"]["1"]
     statses["stats_stwf_10"]["3"] = statses["stats_stwf_10"]["1"]
     statses["stats_stwf_10"]["4.05"] = statses["stats_stwf_10"]["2.05"]
-    statses["stats_stwf_10"]["4.10"] = statses["stats_stwf_10"]["1"]
-    statses["stats_stwf_10"]["4.20"] = statses["stats_stwf_10"]["1"]
+    statses["stats_stwf_10"]["4.10"] = statses["stats_stwf_10"]["2.10"]
+    statses["stats_stwf_10"]["4.20"] = statses["stats_stwf_10"]["2.20"]
+    statses["stats_stwf_10"]["4.30"] = statses["stats_stwf_10"]["2.30"]
+    statses["stats_stwf_10"]["4.40"] = statses["stats_stwf_10"]["2.40"]
 if "stats_ccpp_30" in stats_files:
     statses["stats_ccpp_30"]["2.10"] = statses["stats_ccpp_30"]["1"]
     statses["stats_ccpp_30"]["2.20"] = statses["stats_ccpp_30"]["1"]
+    statses["stats_ccpp_30"]["2.30"] = statses["stats_ccpp_30"]["1"]
+    statses["stats_ccpp_30"]["2.40"] = statses["stats_ccpp_30"]["1"]
     statses["stats_ccpp_30"]["4.10"] = statses["stats_ccpp_30"]["3"]
     statses["stats_ccpp_30"]["4.20"] = statses["stats_ccpp_30"]["3"]
-if "stats_double_pendulum_30" in stats_files:
-    statses["stats_double_pendulum_30"]["2.05"] = statses["stats_double_pendulum_30"]["1"]
-    statses["stats_double_pendulum_30"]["2.10"] = statses["stats_double_pendulum_30"]["1"]
-    statses["stats_double_pendulum_30"]["2.20"] = statses["stats_double_pendulum_30"]["1"]
-    statses["stats_double_pendulum_30"]["4.10"] = statses["stats_double_pendulum_30"]["3"]
-    statses["stats_double_pendulum_30"]["4.20"] = statses["stats_double_pendulum_30"]["3"]
-if "stats_fourbar1_5" in stats_files:
-    statses["stats_fourbar1_5"]["2.20"] = statses["stats_fourbar1_5"]["1"]
-    
-    statses["stats_fourbar1_5"]["4.05"] = 2000*[("Fail", np.nan, np.nan, np.inf)]
-    statses["stats_fourbar1_5"]["4.10"] = 2000*[("Fail", np.nan, np.nan, np.inf)]
+    statses["stats_ccpp_30"]["4.30"] = statses["stats_ccpp_30"]["3"]
+    statses["stats_ccpp_30"]["4.40"] = statses["stats_ccpp_30"]["3"]
+if "stats_fourbar1_3" in stats_files:
+    statses["stats_fourbar1_3"]["2.30"] = statses["stats_fourbar1_3"]["1"]
+    statses["stats_fourbar1_3"]["2.40"] = statses["stats_fourbar1_3"]["1"]
 if "stats_dist4_20" in stats_files:
     statses["stats_dist4_20"]["3"] = statses["stats_dist4_20"]["1"]
     statses["stats_dist4_20"]["4.05"] = statses["stats_dist4_20"]["2.05"]
     statses["stats_dist4_20"]["4.10"] = statses["stats_dist4_20"]["2.10"]
     statses["stats_dist4_20"]["4.20"] = statses["stats_dist4_20"]["2.20"]
+    statses["stats_dist4_20"]["4.30"] = statses["stats_dist4_20"]["2.30"]
+    statses["stats_dist4_20"]["4.40"] = statses["stats_dist4_20"]["2.40"]
+    statses["stats_dist4_20"]["0"] = 1000*[("Fail", np.nan, np.nan, np.inf)]
+if "stats_double_pendulum_30" in stats_files:
+    statses["stats_double_pendulum_30"]["2.10"] = statses["stats_double_pendulum_30"]["1"]
+    statses["stats_double_pendulum_30"]["2.20"] = statses["stats_double_pendulum_30"]["1"]
+    statses["stats_double_pendulum_30"]["2.30"] = statses["stats_double_pendulum_30"]["1"]
+    statses["stats_double_pendulum_30"]["2.40"] = statses["stats_double_pendulum_30"]["1"]
+    statses["stats_double_pendulum_30"]["4.20"] = statses["stats_double_pendulum_30"]["3"]
+    statses["stats_double_pendulum_30"]["4.30"] = statses["stats_double_pendulum_30"]["3"]
+    statses["stats_double_pendulum_30"]["4.40"] = statses["stats_double_pendulum_30"]["3"]
+if "stats_hrsg_marcus_30" in stats_files:
+    statses["stats_hrsg_marcus_30"]["2.05"] = statses["stats_hrsg_marcus_30"]["1"]
+    statses["stats_hrsg_marcus_30"]["2.10"] = statses["stats_hrsg_marcus_30"]["1"]
+    statses["stats_hrsg_marcus_30"]["2.20"] = statses["stats_hrsg_marcus_30"]["1"]
+    statses["stats_hrsg_marcus_30"]["2.30"] = statses["stats_hrsg_marcus_30"]["1"]
+    statses["stats_hrsg_marcus_30"]["2.40"] = statses["stats_hrsg_marcus_30"]["1"]
+    statses["stats_hrsg_marcus_30"]["4.30"] = statses["stats_hrsg_marcus_30"]["3"]
+    statses["stats_hrsg_marcus_30"]["4.40"] = statses["stats_hrsg_marcus_30"]["3"]
 
-    statses["stats_dist4_20"]["0"] = 2000*[("Fail", np.nan, np.nan, np.inf)]
+schemes = [schemes[i] for i in scheme_idxs]
+scheme_labels = [scheme_labels[i] for i in scheme_idxs]
 
 r = {}
 for scheme in schemes:
@@ -71,11 +100,10 @@ def rho(r, s, tau):
     
 plt.close(1)
 plt.figure(1)
-taus = np.logspace(0, 2, 100)
-for (scheme, style) in zip(schemes, scheme_styles):
-    plt.semilogx(taus, [rho(r, scheme, tau) for tau in taus], style)
-plt.legend(schemes, loc='lower right')
+taus = np.logspace(0, 2, 400)
+for (scheme, color, style) in zip(schemes, scheme_colors, scheme_styles):
+    plt.semilogx(taus, [rho(r, scheme, tau) for tau in taus], color=color, linestyle=style, lw=1.5)
+plt.legend(scheme_labels, loc='lower right')
 plt.xlabel('$\\tau$')
 plt.ylabel('$\\rho(\\tau)$')
-plt.grid()
 plt.show()

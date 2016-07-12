@@ -91,7 +91,7 @@ class CausalizationOptions(dict):
         dense_tol --
             Tolerance for controlling density in causalized system. Possible values: [0, inf]
 
-            Default: 10
+            Default: 30
 
         dense_measure --
             Density measure for controlling density in causalized system. Possible values: ['lmfi', 'Markowitz']
@@ -115,7 +115,7 @@ class CausalizationOptions(dict):
         self['inline_solved'] = False
         self['uneliminable'] = []
         self['linear_solver'] = "symbolicqr"
-        self['dense_tol'] = 10
+        self['dense_tol'] = 30
         self['dense_measure'] = 'lmfi'
 
         # Experimental options to be removed
@@ -238,9 +238,11 @@ class Component(object):
         # Find algebraic and differential variables in component
         for vertex in vertices:
             variables.append(vertex.variable)
+            vertex.variable.component = self
             mvars.append(vertex.variable.mvar)
             mx_vars.append(vertex.variable.mx_var)
             equations.append(vertex.equation)
+            vertex.equation.component = self
             eq_expr.append(vertex.equation.expression)
             if self.options['closed_form']:
                 vertex.variable.sx_var = casadi.SX.sym(vertex.variable.name)
@@ -667,6 +669,13 @@ class BipartiteGraph(object):
                     labelbottom='off',
                     labelleft='off')
             i = 0
+            torn_linear_clr = 'SpringGreen'
+            linear_clr = 'ForestGreen'
+            dense_clr = 'Gold'
+            nonlinear_clr = 'Red'
+            uneliminable_clr = 'DarkOrange'
+            derivative_clr = 'Blue'
+            unknown_clr = 'Black'
             for component in self.components:
                 i_new = i + component.n - 1
                 offset = 0.5
@@ -678,19 +687,19 @@ class BipartiteGraph(object):
                     if component.linear:
                         if component.sparsity_preserving:
                             if component.torn:
-                                color = 'SpringGreen'
+                                color = torn_linear_clr
                                 if hasattr(component, 'fcn'):
                                     ls = '--'
                                     n_torn = len(component.block_tear_vars)
                                     plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
                                     plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
                             else:
-                                color = 'Green'
+                                color = linear_clr
                         else:
-                            color = 'Indigo'
+                            color = dense_clr
                     else:
                         if component.torn:
-                            color = 'Tomato'
+                            color = nonlinear_clr
                             if hasattr(component, 'tear_mx_vars'):
                                 ls = '--'
                                 n_torn = len(component.block_tear_vars)
@@ -699,18 +708,22 @@ class BipartiteGraph(object):
                             else:
                                 RuntimeError("BUG?")
                             for (j, causal_co) in enumerate(component.causal_graph.components):
-                                if causal_co.sparsity_preserving:
-                                    causal_color = 'Green'
+                                if causal_co.variables[0].name in self.options['uneliminable']:
+                                    causal_color = uneliminable_clr
+                                elif causal_co.sparsity_preserving:
+                                    causal_color = linear_clr
                                 else:
-                                    causal_color = 'Indigo'
+                                    causal_color = dense_clr
                                 plt.plot([i+j, i+j+1], [-i-j, -i-j], causal_color, lw=lw)
                                 plt.plot([i+j, i+j], [-i-j, -i-j-1], causal_color, lw=lw)
                                 plt.plot([i+j, i+j+1], [-i-j-1, -i-j-1], causal_color, lw=lw)
                                 plt.plot([i+j+1, i+j+1], [-i-j, -i-j-1], causal_color, lw=lw)
                         else:
-                            color = 'Red'
+                            color = nonlinear_clr
+                elif component.n == 1 and component.variables[0].name in self.options['uneliminable']:
+                    color = uneliminable_clr
                 else:
-                    color = 'Yellow'
+                    color = derivative_clr
                 plt.plot([i, i_new], [-i, -i], color, lw=lw)
                 plt.plot([i, i], [-i, -i_new], color, lw=lw)
                 plt.plot([i, i_new], [-i_new, -i_new], color, lw=lw)
@@ -719,17 +732,22 @@ class BipartiteGraph(object):
             for edge in self.edges:
                 ms = 100.0 / self.n ** 0.73
                 if edge.var.is_der:
-                    marker='d'
-                    mew = 2
-                else:
-                    marker='o'
+                    marker = 'o'
                     mew = 1
-                if edge.linear:
-                    markerfacecolor='g'
-                    markeredgecolor='g'
+                    #~ marker = 'd'
+                    #~ mew = 2
                 else:
-                    markerfacecolor='r'
-                    markeredgecolor='r'
+                    marker = 'o'
+                    mew = 1
+                if edge.linear == "unknown":
+                    markerfacecolor = unknown_clr
+                    markeredgecolor = unknown_clr
+                elif edge.linear == True:
+                    markerfacecolor = linear_clr
+                    markeredgecolor = linear_clr
+                else:
+                    markerfacecolor = nonlinear_clr
+                    markeredgecolor = nonlinear_clr
                 plt.plot(edge.var.global_blt_index, -edge.eq.global_blt_index, mew=mew,
                          marker=marker, markerfacecolor=markerfacecolor, markeredgecolor=markeredgecolor, ms=ms)
             eq_offset = np.array([-0.2, -0.17])
@@ -1015,6 +1033,7 @@ class BLTModel(object):
         self._model = model
         self._create_bipgraph()
         self._setup_dependencies()
+        self._compute_blt()
         self._create_residuals()
         self._print_statistics()
         if self.options['closed_form']:
@@ -1030,7 +1049,6 @@ class BLTModel(object):
         # Initialize structures
         self._equations = equations = []
         self._variables = variables = []
-        self._edges = edges = []
         self._mx_var_struct = mx_var_struct = OrderedDict()
         
         # Get model variable vectors
@@ -1114,10 +1132,10 @@ class BLTModel(object):
             i += 1
 
         # Create edges
-        edges = create_edges(equations, variables)
+        self._edges = create_edges(equations, variables)
 
         # Create graph
-        self._graph = BipartiteGraph(equations, variables, edges, self.tear_vars, self.tear_res, self.options)
+        self._graph = BipartiteGraph(equations, variables, self._edges, self.tear_vars, self.tear_res, self.options)
         if self.options['plots']:
             self._graph.draw(11)
 
@@ -1135,6 +1153,28 @@ class BLTModel(object):
 
         for var in self.options['tear_vars']:
             self._dependencies[var] = [var]
+
+    def _compute_blt(self):
+        # Match equations and variables
+        self._graph.maximum_match()
+
+        # Compute strongly connected components
+        self._graph.scc()
+        if self.options['plots']:
+            self._graph.draw(13)
+            self._graph.draw_blt(98, True)
+
+        # Identify linear edges
+        cumidx = 0
+        for component in self._graph.components:
+            component.cumidx = cumidx
+            cumidx += component.n
+        for edge in self._edges:
+            eq = edge.eq
+            var = edge.var
+            #~ if eq.global_blt_index > eq.component.cumidx+eq.component.n or var.global_blt_index < var.component.cumidx:
+            if eq.global_blt_index >= var.component.cumidx+var.component.n:
+                edge.linear = "unknown"
 
     def _create_residuals(self):
         # Create list of named MX variables
@@ -1154,15 +1194,6 @@ class BLTModel(object):
             sx_u = [casadi.SX.sym(name) for name in [var.__repr__()[3:-1] for var in u]]
             self._sx_known_vars = sx_known_vars = sx_time + sx_x + sx_u
             self._sx_solved_vars = sx_solved_vars = []
-
-        # Match equations and variables
-        self._graph.maximum_match()
-
-        # Compute strongly connected components
-        self._graph.scc()
-        if options['plots']:
-            self._graph.draw(13)
-            self._graph.draw_blt(98, True)
 
         #~ for comp in self._graph.components:
             #~ if 'temp_3087' in [var.name for var in comp.variables]:
@@ -1352,8 +1383,11 @@ class BLTModel(object):
                     tear_mx_vars = [var.mx_var for var in co.block_tear_vars]
 
                     for causal_co in co.causal_graph.components:
+                        if causal_co.n > 1:
+                            raise NotImplementedError('Causalized equations must be lower triangular')
                         # Eliminate causal variable
-                        if self._sparsity_preserving(causal_co):
+                        if (self._sparsity_preserving(causal_co) and
+                            causal_co.variables[0].name not in self.options['uneliminable']):
                             causal_co.create_lin_eq(known_vars, solved_vars, tear_mx_vars)
                             
                             # Compute A

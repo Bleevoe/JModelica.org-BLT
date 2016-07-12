@@ -1,4 +1,4 @@
-model Simple
+model Simple2
     Real x(start=1, fixed=true);
     Real y;
     Real z;
@@ -7,7 +7,18 @@ equation
 	der(x) = x + y + z + u;
     der(y) = y + z;
     y = time;
-end Simple;
+end Simple2;
+
+model IndexState
+	Real x;
+	Real y;
+	Real z;
+	//Real y2;//(stateSelect=StateSelect.always);
+equation
+	der(x) = x+y+z;
+	der(y) = x+y;
+	y = time;
+end IndexState;
 
 model Simplest
     Real x(start=1, fixed=true);
@@ -16,10 +27,14 @@ equation
 	der(x) = time + x + u;
 end Simplest;
 
-optimization Simple_Opt(objective=finalTime, finalTime(free=true, initialGuess=1, min=0))
+optimization Simple_Opt2(objective=finalTime, finalTime(free=true, initialGuess=1, min=0))
     extends Simple;
 constraint
 	x(finalTime) = 0;
+end Simple_Opt2;
+
+optimization Simple_Opt(finalTime=2)
+    extends Simple;
 end Simple_Opt;
 
 function p2_fcn
@@ -32,16 +47,20 @@ algorithm
     return;
 end p2_fcn;
 
-model Simple2
-    Real a(start=1, fixed=true);
-    Real x;
-    Real y;
-    Real z;
+model Simple
+    Real x(start=1, fixed=true, min=0.1);
+    Real y1(initialGuess=1, min=0.1);
+    Real y2(initialGuess=1, min=0.1);
+    Real y3(initialGuess=1, min=0.1);
+    Real y4(initialGuess=1, min=0.1);
+    Real y5(initialGuess=1, min=0.1);
 equation
-    der(a) = -x -y -z + 2;
-    sqrt(x) + y + sqrt(z) = sqrt(a)+2;
-    sqrt(x) + sqrt(y) = sqrt(a)+1;
-    x + sqrt(z) = a+1;
+    der(x) = -y1 -y2 + y3;
+    x*y3 + y2 = sqrt(x) + 2;
+    2*y1*y2*y4 = sqrt(x);
+    y4*y1 + sqrt(y3) = x + y4;
+    y4 = sqrt(y5);
+    y5^2 = x;
 end Simple;
 
 model Fischer

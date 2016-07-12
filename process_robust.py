@@ -3,7 +3,22 @@ from IPython.core.debugger import Tracer; dh = Tracer()
 from scipy.stats import norm
 import numpy as np
 
-stats = pickle.load(open('stats_fourbar1_5_1464279933', "rb"))
+stats = pickle.load(open('stats_dist4_20', "rb"))
+
+def comparator(s1, s2):
+    s1_split = s1.split('.')
+    s2_split = s2.split('.')
+    if s1_split[0] < s2_split[0]:
+        return -1
+    elif s1_split[0] > s2_split[0]:
+        return 1
+    elif s1_split[1] < s2_split[1]:
+        return 1
+    elif s1_split[1] > s2_split[1]:
+        return -1
+    else:
+        return 0
+
 failed_status = {}
 failed_status_scheme = {}
 for problem in stats:
@@ -13,7 +28,25 @@ for problem in stats:
     failed_status_scheme[problem] = {}
     n_runs = len(prb_stats.values()[0])
     table_schemes = []
-    for scheme in sorted(prb_stats.keys()):
+
+    # Rename schemes
+    for key in prb_stats.keys():
+        key_split = key.split('.')
+        switch = False
+        if key_split[0] == "2":
+            key_split[0] = "3"
+            switch = True
+        elif key_split[0] == "3":
+            key_split[0] = "2"
+            switch = True
+        if switch:
+            new_key = key_split[0]
+            if new_key == "3":
+                new_key += "." + key_split[1]
+            prb_stats[new_key] = prb_stats[key]
+            del prb_stats[key]
+    
+    for scheme in sorted(prb_stats.keys(), comparator):
         #~ assert len(prb_stats[scheme]) == n_runs, "Schemes did not share runs"
         tot_success = 0.
         tot_full_success = 0.
@@ -104,7 +137,7 @@ for problem in stats:
         table_scheme += "$" + scheme_name +  "$"
         table_scheme += " & " + '%.1f\%%' % (100*success_rate)
         if tot_full_success > 0:
-            table_scheme += " & " + '%.1f\%%' % conf
+            #~ table_scheme += " & " + '%.1f\%%' % conf
             table_scheme += " & " + '%.1f' % avg_time
             table_scheme += " & " + '%.1f' % scheme_std_dev
             table_scheme += " & " + '%.1f' % (tot_iter/tot_full_success)
@@ -113,23 +146,21 @@ for problem in stats:
           (n_runs, int(round(valid_runs)), int(round(tot_full_success)), int(round(invalid_runs))))
 
     table = """
-\\begin{table}[H]
-\\caption{Scheme performances on %d instances of %s with $\sigma = xxx$.
-On %.1f\%% of the instances, all schemes successfully solved the problem.
-On %.1f\%% of the instances, all schemes failed.
-<insert something about failure reasons>}
+\\begin{table}[ht]
 \\centering
-\\vspace{11pt}
-\\begin{tabular}{cccccc}
+\\tbl{Scheme performances on %d instances of %s.
+On %.1f\%% of the instances, all schemes successfully solved the problem.
+On %.1f\%% of the instances, all schemes failed.}
+{\\begin{tabular}[l]{@{}ccccc}
 \\toprule
-Scheme & Success & Conf. & Time & $\sigma_t$ & Iter \\\\
+\textsc{Scheme} & Success & Time & $\sigma_t$ & Iter \\\\
 \\midrule
 """ % (n_runs, problem, 100*tot_full_success/n_runs, 100*invalid_runs/n_runs)
     for tbl_schm in table_schemes:
         table += tbl_schm
-    table += """
-\\bottomrule
-\\end{tabular}
+    table += """\\bottomrule
+\\end{tabular}}
+\\label{tab:xxx}
 \\end{table}
 """
     print(table)

@@ -15,26 +15,28 @@ import numpy as np
 import scipy.io as sio
 
 if __name__ == "__main__":
+    full_t_0 = time.time()
     # Define problem
     plt.rcParams.update({'text.usetex': False})
     problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "hrsg_marcus",
-               "dist4", "fourbar1"][-1]
+               "dist4", "fourbar1"][-3]
     source = ["Modelica", "strings"][0]
     with_plots = True
-    #~ with_plots = False
+    with_plots = False
     with_opt = True
-    #~ with_opt = False
+    with_opt = False
     blt = True
     #~ blt = False
     jm_blt = True
     jm_blt = False
     caus_opts = sp.CausalizationOptions()
     #~ caus_opts['plots'] = True
-    #~ caus_opts['draw_blt'] = True
-    #~ caus_opts['blt_strings'] = False
+    caus_opts['draw_blt'] = True
+    caus_opts['blt_strings'] = False
     caus_opts['solve_blocks'] = False
-    #~ caus_opts['dense_tol'] = 5
-    caus_opts['dense_tol'] = np.inf
+    caus_opts['dense_tol'] = 5
+    #~ caus_opts['dense_measure'] = "Markowitz"
+    #~ caus_opts['dense_tol'] = np.inf
     caus_opts['tearing'] = True
     #~ caus_opts['ad_hoc_scale'] = True
     #~ caus_opts['inline'] = False
@@ -49,14 +51,23 @@ if __name__ == "__main__":
         else:
             class_name = "Simple_Opt"
             file_paths = "simple.mop"
-            opts = {'eliminate_alias_variables': True, 'generate_html_diagnostics': True}
+            opts = {'eliminate_alias_variables': True, 'generate_html_diagnostics': True, 'equation_sorting': True,
+                    'variability_propagation': False}
             op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
             #~ op.set('p', 0.0)
 
             #~ caus_opts['uneliminable'] = ["y"]
             opt_opts = op.optimize_options()
-            opt_opts['IPOPT_options']['linear_solver'] = "ma27"
-            caus_opts['linear_solver'] = "symbolicqr"
+            opt_opts['IPOPT_options']['linear_solver'] = "ma57"
+            opt_opts['order'] = "random"
+            opt_opts['n_e'] = 1
+            opt_opts['n_cp'] = 2
+            opt_opts['named_vars'] = True
+            #~ np.random.seed(1)
+            opt_opts['write_scaled_result'] = True
+            #~ caus_opts['linear_solver'] = "symbolicqr"
+            caus_opts['tear_vars'] = ["y3"]
+            caus_opts['tear_res'] = [2]
     elif problem == "triangular":
         uneliminable = []
         if source == "strings":
@@ -94,8 +105,8 @@ if __name__ == "__main__":
             opt_opts = op.optimize_options()
     elif problem == "vehicle":
         caus_opts['uneliminable'] = ['car.Fxf', 'car.Fxr', 'car.Fyf', 'car.Fyr']
-        #~ sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
-        sim_res = ResultDymolaTextual("vehicle_sol.txt")
+        sim_res = ResultDymolaTextual(os.path.join(get_files_path(), "vehicle_turn_dymola.txt"))
+        #~ sim_res = ResultDymolaTextual("vehicle_sol.txt")
         ncp = 500
         if source != "Modelica":
             raise ValueError
@@ -107,8 +118,14 @@ if __name__ == "__main__":
         opt_opts = op.optimize_options()
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['tol'] = 1e-9
+        #~ opt_opts['order'] = "reverse"
+        opt_opts['order'] = "random"
+        #~ np.random.seed(5)
+        opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = -1
-        opt_opts['n_e'] = 60
+        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
+        #~ opt_opts['IPOPT_options']['max_iter'] = 0
+        opt_opts['n_e'] = 20
         #~ opt_opts['n_e'] = 100
         #~ opt_opts['n_cp'] = 1
 
@@ -130,6 +147,7 @@ if __name__ == "__main__":
         #~ caus_opts['tear_res'] = [51, 115]
         #~ caus_opts['tear_res'] = [50, 115]
         #~ caus_opts['tear_res'] = [50, 90]
+        caus_opts['tear_res'] = [43, 44]
         #~ caus_opts['solve_torn_linear_blocks'] = True
         time_horizon = 3
         
@@ -138,7 +156,7 @@ if __name__ == "__main__":
         class_name = "Opt"
         file_paths = ("DoublePendulum.mo", "DoublePendulum.mop")
         opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
-                'expose_temp_vars_in_fmu': True}
+                'expose_temp_vars_in_fmu': True, 'equation_sorting': True, 'automatic_tearing': True}
         #~ msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
         #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('Opt_result.txt'))
         init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('dbl_pend_sol.txt'))
@@ -168,6 +186,9 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
         opt_opts['IPOPT_options']['tol'] = 1e-8
+        opt_opts['order'] = "reverse"
+        #~ opt_opts['order'] = "random"
+        opt_opts['write_scaled_result'] = True
         #~ opt_opts['n_e'] = 356
         opt_opts['n_e'] = 100
         #~ opt_opts['n_e'] = 200
@@ -187,11 +208,13 @@ if __name__ == "__main__":
         class_name = "CombinedCycleStartup.Startup6"
         file_paths = (os.path.join(get_files_path(), "CombinedCycle.mo"),
                       os.path.join(get_files_path(), "CombinedCycleStartup.mop"))
-        #~ init_res = ResultDymolaTextual('ccpp_init.txt')
-        init_res = ResultDymolaTextual('ccpp_sol.txt')
+        init_res = ResultDymolaTextual('ccpp_init.txt')
+        #~ init_res = ResultDymolaTextual('ccpp_sol.txt')
         opts = {'generate_html_diagnostics': True}
         op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
         opt_opts = op.optimize_options()
+        opt_opts['order'] = "random"
+        opt_opts['write_scaled_result'] = True
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
         #~ opt_opts['explicit_hessian'] = True
@@ -228,8 +251,8 @@ if __name__ == "__main__":
             raise ValueError
         class_name = "HeatRecoveryOptim.Plant_optim"
         file_paths = ['OCTTutorial','HeatRecoveryOptim.mop']
-        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_guess.txt'))
-        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_sol.txt'))
+        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_guess.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_sol.txt'))
         opts = {'generate_html_diagnostics': True, 'state_initial_equations': True, 'inline_functions': 'none',
                 'equation_sorting': jm_blt}
         op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
@@ -244,11 +267,17 @@ if __name__ == "__main__":
         opt_opts = op.optimize_options()
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
-        #~ opt_opts['n_e'] = 55
-        opt_opts['n_cp'] = 5
+        opt_opts['n_e'] = 12
+        ne = opt_opts['n_e']
+        opt_opts['hs'] = 3*ne/4*[2./3./ne] + ne/4*[2./ne]
+        opt_opts['n_cp'] = 4
+        #~ opt_opts['n_e'] = 25
+        #~ opt_opts['n_cp'] = 5
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
-        opt_opts['IPOPT_options']['acceptable_tol'] = 1e-8
-        #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
+        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
+        #~ opt_opts['IPOPT_options']['acceptable_tol'] = 1e-8
+        opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         #~ opt_opts['IPOPT_options']['mu_init'] = 1e-9
     elif problem == "hrsg_marcus":
         caus_opts['uneliminable'] = ['dT_SH2', 'dT_RH']
@@ -271,8 +300,8 @@ if __name__ == "__main__":
         class_name = "HeatRecoveryOptim.Plant_optim"
         file_paths = ['hrsg_marcus/HeatRecoveryOptim.mop']
         extra_lib_dirs = ['/work/fredrikm/JModelica.org-BLT/hrsg_marcus']
-        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_init.txt'))
-        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_sol2.txt'))
+        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_init.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('hrsg_marcus_sol2.txt'))
         opts = {'generate_html_diagnostics': True, 'state_initial_equations': True, 'inline_functions': 'none',
                 'equation_sorting': jm_blt, 'extra_lib_dirs': extra_lib_dirs}
         op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
@@ -288,18 +317,19 @@ if __name__ == "__main__":
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
         opt_opts['named_vars'] = True
-        opt_opts['n_e'] = 25
+        opt_opts['n_e'] = 12
         ne = opt_opts['n_e']
-        #~ opt_opts['hs'] = 3*ne/4*[2./3./ne] + ne/4*[2./ne]
-        opt_opts['n_cp'] = 5
+        opt_opts['hs'] = 3*ne/4*[2./3./ne] + ne/4*[2./ne]
+        opt_opts['n_cp'] = 4
+        #~ opt_opts['n_e'] = 25
+        #~ opt_opts['n_cp'] = 5
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
-        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
-        opt_opts['IPOPT_options']['bound_frac'] = 1e-10
-        opt_opts['IPOPT_options']['bound_push'] = 1e-10
-        #~ opt_opts['IPOPT_options']['max_iter'] = 0
-        
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
-        #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
+        #~ opt_opts['IPOPT_options']['max_iter'] = 0
+        opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['order'] = "random"
+        opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-2
         
@@ -313,7 +343,8 @@ if __name__ == "__main__":
         class_name = "JMExamples_opt.Distillation4_Opt"
         file_paths = (os.path.join(get_files_path(), "JMExamples.mo"),
                       os.path.join(get_files_path(), "JMExamples_opt.mop"))
-        init_res = ResultDymolaTextual('dist4_init.txt')
+        #~ init_res = ResultDymolaTextual('dist4_sol.txt')
+        init_res = ResultDymolaTextual('dist4_init_3.txt')
         opts = {'generate_html_diagnostics': True}
         op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
 
@@ -330,14 +361,19 @@ if __name__ == "__main__":
                 op.set('V_init[' + `i` + ']', break_res.get_variable_data('V[' + `i` + ']').x[-1])
         
         opt_opts = op.optimize_options()
-        #~ opt_opts['init_traj'] = init_res
-        #~ opt_opts['nominal_traj'] = init_res
+        opt_opts['init_traj'] = init_res
+        opt_opts['nominal_traj'] = init_res
         opt_opts['n_e'] = 20
-        opt_opts['IPOPT_options']['linear_solver'] = "ma27"
+        opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = 10
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['max_iter'] = 100
-        opt_opts['IPOPT_options']['mu_init'] = 1e-3
+        opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        #~ opt_opts['IPOPT_options']['mu_init'] = 1e-3
+        #~ opt_opts['order'] = "random"
+        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['IPOPT_options']['print_timing_statistics'] = "yes"
+        
     elif problem == "fourbar1":
         uneliminable = ['fourbar1.j2.s']
         caus_opts['uneliminable'] = uneliminable
@@ -360,12 +396,11 @@ if __name__ == "__main__":
         class_name = "Fourbar1.Fourbar1Feedback"
         file_paths = ("Fourbar1.mo", "Fourbar1.mop")
         compiler_opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
-                'expose_temp_vars_in_fmu': True}
+                'expose_temp_vars_in_fmu': True, 'equation_sorting': False, 'automatic_tearing': False}
         #~ fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=compiler_opts))
         #~ init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
         init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_opt_init.txt'))
         
-        compiler_opts['generate_html_diagnostics'] = False
         class_name_opt = "Fourbar1_Opt"
         op = transfer_optimization_problem(class_name_opt, file_paths, compiler_options=compiler_opts)
         op.set('finalTime', time_horizon)
@@ -379,6 +414,9 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-3
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['result_file_name'] = "fourbar1_sol_new.txt"
+        opt_opts['order'] = "random"
+        opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['mu_init'] = 1e-5
         
         opt_opts['n_e'] = 60
@@ -394,6 +432,8 @@ if __name__ == "__main__":
         if jm_blt:
             op.eliminateAlgebraics()
     print("n_y: %d" % len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()]))
+    offline_t = time.time() - full_t_0
+    print('Compilation etc.: %.3f s' % offline_t)
     
     # Optimize and plot
     if with_opt:
@@ -413,18 +453,18 @@ if __name__ == "__main__":
         if problem == "simple":
             t = res['time']
             x = res['x']
-            y = res['y']
-            z = res['z']
-            u = res['u']
+            y1 = res['y1']
+            y2 = res['y2']
+            y3 = res['y3']
 
             if with_plots:
                 plt.close(101)
                 plt.figure(101)
                 plt.plot(t, x)
-                plt.plot(t, y)
-                plt.plot(t, z)
-                plt.plot(t, u)
-                plt.legend(['x', 'y', 'z', 'u'])
+                plt.plot(t, y1)
+                plt.plot(t, y2)
+                plt.plot(t, y3)
+                plt.legend(['x', 'y1', 'y2', 'y3'])
                 plt.show()
         elif problem == "triangular":
             t = res['time']
@@ -511,39 +551,39 @@ if __name__ == "__main__":
                 plt.legend(['delta [deg]', 'Twf [kN]', 'Twr [kN]'], loc=4)
                 plt.show()
         elif problem == "double_pendulum":
-            init_time = init_res['time']
-            init_phi1 = init_res['pendulum.revolute1.phi']
-            init_phi2 = init_res['pendulum.revolute2.phi']
-            init_r1 = init_res['pendulum.boxBody1.r[1]'][0]
-            init_r2 = init_res['pendulum.boxBody2.r[1]'][0]
-            init_x1 = init_r1*cos(init_phi1)
-            init_y1 = init_r1*sin(init_phi1)
-            init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
-            init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
-            time = res['time']
-            phi1 = res['pendulum.revolute1.phi']
-            phi2 = res['pendulum.revolute2.phi']
-            r1 = res['pendulum.boxBody1.r[1]'][0]
-            r2 = res['pendulum.boxBody2.r[1]'][0]
-            x1 = r1*cos(phi1)
-            y1 = r1*sin(phi1)
-            x2 = x1 + r2*cos(phi1 + phi2)
-            y2 = y1 + r2*sin(phi1 + phi2)
-            sim_fmu = load_fmu(compile_fmu("DoublePendulum.Sim", file_paths))
-            sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
-                                       input=res.get_opt_input())
-            sim_time = sim_res['time']
-            sim_phi1 = sim_res['pendulum.revolute1.phi']
-            sim_phi2 = sim_res['pendulum.revolute2.phi']
-            sim_r1 = sim_res['pendulum.boxBody1.r[1]'][0]
-            sim_r2 = sim_res['pendulum.boxBody2.r[1]'][0]
-            sim_x1 = sim_r1*cos(sim_phi1)
-            sim_y1 = sim_r1*sin(sim_phi1)
-            sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
-            sim_y2 = sim_y1 + sim_r2*sin(sim_phi1 + sim_phi2)
+            #~ init_time = init_res['time']
+            #~ init_phi1 = init_res['pendulum.revolute1.phi']
+            #~ init_phi2 = init_res['pendulum.revolute2.phi']
+            #~ init_r1 = init_res['pendulum.boxBody1.r[1]'][0]
+            #~ init_r2 = init_res['pendulum.boxBody2.r[1]'][0]
+            #~ init_x1 = init_r1*cos(init_phi1)
+            #~ init_y1 = init_r1*sin(init_phi1)
+            #~ init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
+            #~ init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
+            #~ time = res['time']
+            #~ phi1 = res['pendulum.revolute1.phi']
+            #~ phi2 = res['pendulum.revolute2.phi']
+            #~ r1 = res['pendulum.boxBody1.r[1]'][0]
+            #~ r2 = res['pendulum.boxBody2.r[1]'][0]
+            #~ x1 = r1*cos(phi1)
+            #~ y1 = r1*sin(phi1)
+            #~ x2 = x1 + r2*cos(phi1 + phi2)
+            #~ y2 = y1 + r2*sin(phi1 + phi2)
+            #~ sim_fmu = load_fmu(compile_fmu("DoublePendulum.Sim", file_paths))
+            #~ sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
+                                       #~ input=res.get_opt_input())
+            #~ sim_time = sim_res['time']
+            #~ sim_phi1 = sim_res['pendulum.revolute1.phi']
+            #~ sim_phi2 = sim_res['pendulum.revolute2.phi']
+            #~ sim_r1 = sim_res['pendulum.boxBody1.r[1]'][0]
+            #~ sim_r2 = sim_res['pendulum.boxBody2.r[1]'][0]
+            #~ sim_x1 = sim_r1*cos(sim_phi1)
+            #~ sim_y1 = sim_r1*sin(sim_phi1)
+            #~ sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
+            #~ sim_y2 = sim_y1 + sim_r2*sin(sim_phi1 + sim_phi2)
 
-            opt_torque = np.vstack([time, res['u']]).T
-            sio.savemat('double_pendulum_sol.mat', {'torque': opt_torque})
+            #~ opt_trajs = np.vstack([time, res['u'], phi1, phi2]).T
+            #~ sio.savemat('double_pendulum_sol.mat', {'opt_trajs': opt_trajs})
             
             if with_plots:
                 plt.close(1)
@@ -606,38 +646,39 @@ if __name__ == "__main__":
             SHTRef=res['SHTRef']
             SHPRef=res['SHPRef']
             RHPRef=res['RHPRef']
-            plt.figure(2)
-            plt.subplot(411)
-            plt.plot(res['time'],res['sys.SH2.T_water_out'],'r', label = 'SH2 T steam out [K]')
-            plt.plot(res['time'],res['sys.RH.T_water_out'], label = 'RH T steam out [K]')
-            plt.plot(res['time'],Tgasin,'g', label = 'T gas [K]')
-            plt.plot(res['time'],SHTRef,'r--', label = 'SH T reference [K]')
-            plt.ylabel('Temp. [K]')
-            plt.legend()
-            plt.grid()
-            plt.subplot(412)
-            plt.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r', label = 'SH2 p steam out [bar]')
-            plt.plot(res['time'],res['sys.RH.water_out.p']/1e5,  label = 'SH p steam out [bar]')
-            plt.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
-            plt.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
-            plt.ylabel('Pressure [bar]')
-            plt.legend()
-            plt.grid()
-            plt.subplot(413)
-            plt.plot(res['time'],uSHP, label = 'SH valve position')
-            plt.plot(res['time'],uRHP,'r', label = 'RH valve position')
-            plt.legend()
-            plt.grid()
-            plt.ylabel('Position')
-            plt.subplot(414)
-            plt.plot(res['time'],res['dT_SH2'], label = 'dT SH 2 [K]')
-            plt.plot(res['time'],res['dT_RH'],'g', label = 'dT RH 2 [K]')
-            plt.plot(res['time'],res['dTMax_SH2'],'b--', label = 'max dT SH 2 [K]')
-            plt.plot(res['time'],res['dTMax_RH'],'g--', label = 'max dT RH [K]')
-            plt.grid()
-            plt.ylabel('dT [K]')
-            plt.legend()
-            plt.show()
+            if with_plots:
+                plt.figure(2)
+                plt.subplot(411)
+                plt.plot(res['time'],res['sys.SH2.T_water_out'],'r', label = 'SH2 T steam out [K]')
+                plt.plot(res['time'],res['sys.RH.T_water_out'], label = 'RH T steam out [K]')
+                plt.plot(res['time'],Tgasin,'g', label = 'T gas [K]')
+                plt.plot(res['time'],SHTRef,'r--', label = 'SH T reference [K]')
+                plt.ylabel('Temp. [K]')
+                plt.legend()
+                plt.grid()
+                plt.subplot(412)
+                plt.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r', label = 'SH2 p steam out [bar]')
+                plt.plot(res['time'],res['sys.RH.water_out.p']/1e5,  label = 'SH p steam out [bar]')
+                plt.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
+                plt.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
+                plt.ylabel('Pressure [bar]')
+                plt.legend()
+                plt.grid()
+                plt.subplot(413)
+                plt.plot(res['time'],uSHP, label = 'SH valve position')
+                plt.plot(res['time'],uRHP,'r', label = 'RH valve position')
+                plt.legend()
+                plt.grid()
+                plt.ylabel('Position')
+                plt.subplot(414)
+                plt.plot(res['time'],res['dT_SH2'], label = 'dT SH 2 [K]')
+                plt.plot(res['time'],res['dT_RH'],'g', label = 'dT RH 2 [K]')
+                plt.plot(res['time'],res['dTMax_SH2'],'b--', label = 'max dT SH 2 [K]')
+                plt.plot(res['time'],res['dTMax_RH'],'g--', label = 'max dT RH [K]')
+                plt.grid()
+                plt.ylabel('dT [K]')
+                plt.legend()
+                plt.show()
         elif problem == "dist4":
             # Extract results
             opt_T_14 = res['Temp[28]']
@@ -740,9 +781,10 @@ if __name__ == "__main__":
                 plot_solution(opt_t, opt_T_28, opt_T_14, opt_Q, opt_L_vol, 5,
                               'Optimal control')
         elif problem == "fourbar1":
-            sim_fmu = load_fmu(compile_fmu("Fourbar1.Fourbar1Sim", file_paths, compiler_options=compiler_opts))
-            sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
-                                       input=res.get_opt_input())
+            #~ sim_fmu = load_fmu(compile_fmu("Fourbar1.Fourbar1Sim", file_paths, compiler_options=compiler_opts))
+            #~ sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
+                                       #~ input=res.get_opt_input())
+            sim_res = res
             sim_time = sim_res['time']
             sim_s = sim_res['fourbar1.j2.s']
             sim_phi = sim_res['fourbar1.j1.phi']
@@ -786,14 +828,18 @@ if __name__ == "__main__":
 
         solver = res.solver
 
-        c_MX_fcn = casadi.MXFunction([solver.xx, solver.pp], [casadi.vertcat([solver.c_e, solver.c_i])])
-        c_MX_fcn.init()
-        c_fcn = casadi.SXFunction(c_MX_fcn)
-        c_fcn.init()
-        c_fcn.setInput(solver.xx_init, 0)
-        c_fcn.setInput(solver._par_vals, 1)
-        c_fcn.evaluate()
-        inf = c_fcn.output().toArray().reshape(-1)
-        np.where(abs(inf) > 1e2)
-        sum(abs(inf) > 1000)
-
+        #~ c = casadi.MXFunction([solver.xx, solver.pp], [solver.constraints])
+        #~ c.init()
+        #~ xx_init = solver.xx_init
+        #~ c.setInput(xx_init, 0)
+        #~ c.setInput(solver._par_vals, 1)
+        #~ c.evaluate()
+        #~ c_val = c.getOutput(0).toArray().reshape(-1)
+        #~ print(c_val[2])
+        #~ J = c.jacobian()
+        #~ J.init()
+        #~ J.setInput(xx_init, 0)
+        #~ J.setInput(solver._par_vals, 1)
+        #~ J.evaluate()
+        #~ J_val = J.getOutput(0).toArray()
+        #~ print(solver.var_ordering[-5:-1])
