@@ -183,5 +183,21 @@ of revolute joint j1 is set to 300 deg/s in order to drive this loop.
   equation
     fourbar1.u = u;
   end Fourbar1Sim;
-  annotation (uses(Modelica(version="3.2.1")));
+  
+  model JMSim
+    Fourbar1 fourbar1_1(torque1(color={155,155,155}, Nm_to_m=300))
+      annotation (Placement(transformation(extent={{44,-2},{72,18}})));
+    Modelica.Blocks.Sources.CombiTimeTable combiTimeTable(
+      tableOnFile=true,
+      tableName="opt_trajs",
+      fileName="/work/fredrikm/JModelica.org-BLT/fourbar_sol.mat")
+      annotation (Placement(transformation(extent={{-46,0},{-26,20}})));
+  equation
+    connect(combiTimeTable.y[1], fourbar1_1.u) annotation (Line(
+        points={{-25,10},{10,10},{10,9.3},{45.5,9.3}},
+        color={0,0,127},
+        smooth=Smooth.None));
+    annotation (Diagram(coordinateSystem(preserveAspectRatio=false, extent={{
+              -100,-100},{100,100}}), graphics));
+  end JMSim;
 end Fourbar1;

@@ -12,41 +12,26 @@ from collections import OrderedDict
 from modelicacasadi_wrapper import Model
 from pyjmi.common.core import ModelBase
 
-class CausalizationOptions(dict):
+class EliminationOptions(dict):
 
     """
-    dict-like options class for the causalization.
+    dict-like options class for the elimination.
 
-    Options::
-
-        plots --
-            Whether to plot intermediate algorithm results.
-
-            Default: False
+    Standard options::
 
         draw_blt --
             Whether to plot the BLT form.
 
             Default: False
 
-        blt_strings --
-            Whether to annotate BLT form with strings for variables and equations.
-
-            Default: True
-
-        solve_blocks --
-            Whether to factorize coefficient matrices in non-scalar, linear blocks.
-
-            Default: False
-
-        solve_torn_linear_blocks --
-            Whether to solve causalized equations in torn blocks, rather than doing forward substitution as for
-            nonlinear blocks.
+        draw_blt_strings --
+            Whether to annotate plot of the BLT form with strings for variables and equations.
 
             Default: False
 
         tearing --
-            Whether to tear algebraic loops. Only applicable if solve_blocks is True.
+            Whether to tear algebraic loops. Choice of variables and residuals is done with options tear_vars and
+            tear_res_indices.
 
             Default: False
 
@@ -65,6 +50,47 @@ class CausalizationOptions(dict):
 
             Default: True
 
+        uneliminable --
+            Names of variables that should not be eliminated. Particularly useful for variables with bounds.
+
+            Default: []
+
+        dense_measure --
+            Density measure for controlling density in causalized system. Possible values: ['lmfi', 'Markowitz']
+
+            Markowitz uses the Markowitz criterion and lmfi uses local minimum fill-in to estimate density.
+
+            Default: 'lmfi'
+
+        dense_tol --
+            Tolerance for controlling density in causalized system. Possible values: [0, inf]
+
+            Default: 15
+
+    Experimental/debug options::
+
+        plots --
+            Whether to plot intermediate results for matching and component computation.
+
+            Default: False
+
+        solve_blocks --
+            Whether to factorize coefficient matrices in non-scalar, linear blocks.
+
+            Default: False
+
+        solve_torn_linear_blocks --
+            Whether to solve causalized equations in torn blocks, rather than doing forward substitution as for
+            nonlinear blocks.
+
+            Default: False
+
+        linear_solver --
+            Which linear solver to use.
+            See http://casadi.sourceforge.net/api/html/d8/d6a/classcasadi_1_1LinearSolver.html for possibilities
+
+            Default: "symbolicqr"
+
         closed_form --
             Whether to create a closed form expression for residuals and solutions. Disables computations.
 
@@ -75,36 +101,12 @@ class CausalizationOptions(dict):
             if closed_form == True).
 
             Default: False
-
-        uneliminable --
-            Names of variables that should not be solved for. Particularly useful for variables with bounds in
-            optimization.
-
-            Default: []
-
-        linear_solver --
-            Which linear solver to use.
-            See http://casadi.sourceforge.net/api/html/d8/d6a/classcasadi_1_1LinearSolver.html for possibilities
-
-            Default: "symbolicqr"
-
-        dense_tol --
-            Tolerance for controlling density in causalized system. Possible values: [0, inf]
-
-            Default: 30
-
-        dense_measure --
-            Density measure for controlling density in causalized system. Possible values: ['lmfi', 'Markowitz']
-
-            Markowitz uses the Markowitz criterion and lmfi uses local minimum fill-in to estimate density.
-
-            Default: 'lmfi'
     """
 
     def __init__(self):
         self['plots'] = False
         self['draw_blt'] = False
-        self['blt_strings'] = True
+        self['draw_blt_strings'] = False
         self['solve_blocks'] = False
         self['solve_torn_linear_blocks'] = False
         self['tearing'] = False
@@ -115,7 +117,7 @@ class CausalizationOptions(dict):
         self['inline_solved'] = False
         self['uneliminable'] = []
         self['linear_solver'] = "symbolicqr"
-        self['dense_tol'] = 30
+        self['dense_tol'] = 15
         self['dense_measure'] = 'lmfi'
 
         # Experimental options to be removed
@@ -681,7 +683,7 @@ class BipartiteGraph(object):
                 offset = 0.5
                 i -= offset
                 i_new += offset
-                lw = 2
+                lw = 3./(self.n**0.17)
                 # Colors: https://css-tricks.com/snippets/css/named-colors-and-hex-equivalents/
                 if component.solvable:
                     if component.linear:
@@ -700,13 +702,6 @@ class BipartiteGraph(object):
                     else:
                         if component.torn:
                             color = nonlinear_clr
-                            if hasattr(component, 'tear_mx_vars'):
-                                ls = '--'
-                                n_torn = len(component.block_tear_vars)
-                                plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=lw)
-                                plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=lw)
-                            else:
-                                RuntimeError("BUG?")
                             for (j, causal_co) in enumerate(component.causal_graph.components):
                                 if causal_co.variables[0].name in self.options['uneliminable']:
                                     causal_color = uneliminable_clr
@@ -718,6 +713,13 @@ class BipartiteGraph(object):
                                 plt.plot([i+j, i+j], [-i-j, -i-j-1], causal_color, lw=lw)
                                 plt.plot([i+j, i+j+1], [-i-j-1, -i-j-1], causal_color, lw=lw)
                                 plt.plot([i+j+1, i+j+1], [-i-j, -i-j-1], causal_color, lw=lw)
+                            if hasattr(component, 'tear_mx_vars'):
+                                ls = '--'
+                                n_torn = len(component.block_tear_vars)
+                                plt.plot([i, i_new], [-i_new + n_torn, -i_new + n_torn], color, ls=ls, lw=0.5*lw)
+                                plt.plot([i_new - n_torn, i_new - n_torn], [-i, -i_new], color, ls=ls, lw=0.5*lw)
+                            else:
+                                RuntimeError("BUG?")
                         else:
                             color = nonlinear_clr
                 elif component.n == 1 and component.variables[0].name in self.options['uneliminable']:
@@ -1595,20 +1597,17 @@ class BLTModel(object):
 
     def _print_statistics(self):
         """
-        Print number of blocks and linearity.
+        Print BLT statistics.
         """
-        n_blocks = {}
-        n_solvlin_blocks = {}
-        for co in self._graph.components:
-            if n_blocks.has_key(co.n):
-                n_blocks[co.n] += 1
-                n_solvlin_blocks[co.n] += co.solvable and co.linear
-            else:
-                n_blocks[co.n] = 1
-                n_solvlin_blocks[co.n] = co.solvable and co.linear
-        print('System has:')
-        for n in n_blocks:
-            print('\t%d blocks of size %d, of which %d are solvable and linear' % (n_blocks[n], n, n_solvlin_blocks[n])) 
+        block_sizes = np.sort([co.n for co in self._graph.components])
+        n_alg_before = len([var for var in self._model.getVariables(self._model.REAL_ALGEBRAIC) if not var.isAlias()])
+        n_alg_after = len([var for var in self.getVariables(self.REAL_ALGEBRAIC) if not var.isAlias()])
+        print('\nSystem has %d algebraic variables before elimination and %d after.' % (n_alg_before, n_alg_after))
+        n_blocks = len(self._graph.components)
+        if n_blocks > 3:
+            print('The three largest BLT blocks have sizes %d, %d, and %d.\n' % tuple(block_sizes[-1:-4:-1]))
+        else:
+            print('The system has %d BLT blocks of sizes: %s' % (n_blocks, block_sizes[::-1]))
 
     def getVariables(self, vk):
         if vk == self.REAL_ALGEBRAIC:

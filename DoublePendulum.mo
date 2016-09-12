@@ -153,14 +153,13 @@ ALT=\"model Examples.Elementary.DoublePendulum\">
           transformation(extent={{-128,0},{-108,20}},
                                                     rotation=0)));
     Modelica.Mechanics.MultiBody.Joints.Revolute revolute1(useAxisFlange=true,
-      w(
-        fixed=true,
+      w(fixed=true,
         start=0,
         displayUnit="deg/s"),
       phi(
         fixed=true,
         displayUnit="deg",
-        start=0))                                                  annotation (Placement(transformation(extent={{-48,0},
+        start=0.20420352248334))                                   annotation (Placement(transformation(extent={{-48,0},
               {-28,20}}, rotation=0)));
     Modelica.Mechanics.Rotational.Components.Damper damper(d=0.1)
       annotation (Placement(transformation(extent={{-48,40},{-28,60}}, rotation=0)));
@@ -168,8 +167,7 @@ ALT=\"model Examples.Elementary.DoublePendulum\">
       annotation (Placement(transformation(extent={{-10,0},{10,20}}, rotation=0)));
     Modelica.Mechanics.MultiBody.Joints.Revolute revolute2(
       useAxisFlange=false,
-      w(
-        fixed=true,
+      w(fixed=true,
         displayUnit="deg/s",
         start=0),
       phi(fixed=true, start=0))                            annotation (Placement(transformation(extent={{48,0},{

@@ -14,15 +14,31 @@ import time
 import numpy as np
 import scipy.io as sio
 
+# Define function for custom axis scaling in plots
+def scale_axis(figure=plt, xfac=0.08, yfac=0.08):
+    """
+    Adjust the axis.
+
+    The size of the axis is first changed to plt.axis('tight') and then
+    scaled by (1 + xfac) horizontally and (1 + yfac) vertically.
+    """
+    (xmin, xmax, ymin, ymax) = figure.axis('tight')
+    if figure == plt:
+        figure.xlim(xmin - xfac * (xmax - xmin), xmax + xfac * (xmax - xmin))
+        figure.ylim(ymin - yfac * (ymax - ymin), ymax + yfac * (ymax - ymin))
+    else:
+        figure.set_xlim(xmin - xfac * (xmax - xmin), xmax + xfac * (xmax - xmin))
+        figure.set_ylim(ymin - yfac * (ymax - ymin), ymax + yfac * (ymax - ymin))
+
 if __name__ == "__main__":
     full_t_0 = time.time()
     # Define problem
-    plt.rcParams.update({'text.usetex': False})
+    #~ plt.rcParams.update({'text.usetex': False})
     problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "hrsg_marcus",
                "dist4", "fourbar1"][-3]
     source = ["Modelica", "strings"][0]
     with_plots = True
-    with_plots = False
+    #~ with_plots = False
     with_opt = True
     with_opt = False
     blt = True
@@ -34,9 +50,9 @@ if __name__ == "__main__":
     caus_opts['draw_blt'] = True
     caus_opts['blt_strings'] = False
     caus_opts['solve_blocks'] = False
-    caus_opts['dense_tol'] = 5
-    #~ caus_opts['dense_measure'] = "Markowitz"
+    caus_opts['dense_tol'] = 30
     #~ caus_opts['dense_tol'] = np.inf
+    #~ caus_opts['dense_measure'] = "Markowitz"
     caus_opts['tearing'] = True
     #~ caus_opts['ad_hoc_scale'] = True
     #~ caus_opts['inline'] = False
@@ -59,12 +75,12 @@ if __name__ == "__main__":
             #~ caus_opts['uneliminable'] = ["y"]
             opt_opts = op.optimize_options()
             opt_opts['IPOPT_options']['linear_solver'] = "ma57"
-            opt_opts['order'] = "random"
+            #~ opt_opts['order'] = "random"
             opt_opts['n_e'] = 1
             opt_opts['n_cp'] = 2
             opt_opts['named_vars'] = True
             #~ np.random.seed(1)
-            opt_opts['write_scaled_result'] = True
+            #~ opt_opts['write_scaled_result'] = True
             #~ caus_opts['linear_solver'] = "symbolicqr"
             caus_opts['tear_vars'] = ["y3"]
             caus_opts['tear_res'] = [2]
@@ -119,13 +135,13 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['tol'] = 1e-9
         #~ opt_opts['order'] = "reverse"
-        opt_opts['order'] = "random"
+        #~ opt_opts['order'] = "random"
         #~ np.random.seed(5)
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = -1
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
         #~ opt_opts['IPOPT_options']['max_iter'] = 0
-        opt_opts['n_e'] = 20
+        opt_opts['n_e'] = 60
         #~ opt_opts['n_e'] = 100
         #~ opt_opts['n_cp'] = 1
 
@@ -159,10 +175,10 @@ if __name__ == "__main__":
                 'expose_temp_vars_in_fmu': True, 'equation_sorting': True, 'automatic_tearing': True}
         #~ msl_pendulum = "Modelica.Mechanics.MultiBody.Examples.Elementary.DoublePendulum"
         #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('Opt_result.txt'))
-        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('dbl_pend_sol.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('dbl_pend_sol.txt'))
         #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('DoublePendulum_Sim_result.txt'))
-        #~ init_fmu = load_fmu(compile_fmu("DoublePendulum.Feedback", file_paths, compiler_options=opts))
-        #~ init_res = init_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
+        init_fmu = load_fmu(compile_fmu("DoublePendulum.Feedback", file_paths, compiler_options=opts))
+        init_res = init_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
         
         #~ init_op = transfer_optimization_problem(class_name, file_path, compiler_options=opts)
         #~ init_op.set('finalTime', time_horizon)
@@ -186,9 +202,9 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-4
         opt_opts['IPOPT_options']['tol'] = 1e-8
-        opt_opts['order'] = "reverse"
+        #~ opt_opts['order'] = "reverse"
         #~ opt_opts['order'] = "random"
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['n_e'] = 356
         opt_opts['n_e'] = 100
         #~ opt_opts['n_e'] = 200
@@ -213,8 +229,8 @@ if __name__ == "__main__":
         opts = {'generate_html_diagnostics': True}
         op = transfer_optimization_problem(class_name, file_paths, compiler_options=opts)
         opt_opts = op.optimize_options()
-        opt_opts['order'] = "random"
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['order'] = "random"
+        #~ opt_opts['write_scaled_result'] = True
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
         #~ opt_opts['explicit_hessian'] = True
@@ -328,8 +344,8 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
         #~ opt_opts['IPOPT_options']['max_iter'] = 0
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
-        opt_opts['order'] = "random"
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['order'] = "random"
+        #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma27"
         #~ opt_opts['IPOPT_options']['ma27_pivtol'] = 1e-2
         
@@ -337,6 +353,10 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['mu_init'] = 1e-5
     elif problem == "dist4":
         caus_opts['uneliminable'] = ['Dist', 'Bott']
+        caus_opts['tear_vars'] = (['Temp[%d]' % i for i in range(1, 43)] + 
+                                  ['V[%d]' % i for i in range(2, 42)] + ['L[41]'] +
+                                  ['der(xA[%d])' % i for i in range(2, 43)])
+        caus_opts['tear_res'] = range(1083, 1125) + range(1042, 1083) + range(673, 714)
         #~ uneliminable += ['ent_term_A[%d]' % i for i in range(1, 43)] + ['ent_term_B[%d]' % i for i in range(1, 43)]
         if source != "Modelica":
             raise ValueError
@@ -356,14 +376,15 @@ if __name__ == "__main__":
         op.set('Vdot_L1_ref', L_vol_ref)
         for i in xrange(1, 43):
             op.set('xA_init[' + `i` + ']', break_res.get_variable_data('xA[' + `i` + ']').x[-1])
-            op.set('Temp_init[' + `i` + ']', break_res.get_variable_data('Temp[' + `i` + ']').x[-1])
-            if i < 42:
-                op.set('V_init[' + `i` + ']', break_res.get_variable_data('V[' + `i` + ']').x[-1])
+            #~ op.set('Temp_init[' + `i` + ']', break_res.get_variable_data('Temp[' + `i` + ']').x[-1])
+            #~ if i < 42:
+                #~ op.set('V_init[' + `i` + ']', break_res.get_variable_data('V[' + `i` + ']').x[-1])
         
         opt_opts = op.optimize_options()
         opt_opts['init_traj'] = init_res
         opt_opts['nominal_traj'] = init_res
         opt_opts['n_e'] = 20
+        #~ opt_opts['n_cp'] = 25
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = 10
         #~ opt_opts['IPOPT_options']['linear_solver'] = "ma57"
@@ -371,7 +392,7 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         #~ opt_opts['IPOPT_options']['mu_init'] = 1e-3
         #~ opt_opts['order'] = "random"
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['print_timing_statistics'] = "yes"
         
     elif problem == "fourbar1":
@@ -396,10 +417,12 @@ if __name__ == "__main__":
         class_name = "Fourbar1.Fourbar1Feedback"
         file_paths = ("Fourbar1.mo", "Fourbar1.mop")
         compiler_opts = {'generate_html_diagnostics': True, 'inline_functions': 'all', 'dynamic_states': False,
-                'expose_temp_vars_in_fmu': True, 'equation_sorting': False, 'automatic_tearing': False}
+                         'expose_temp_vars_in_fmu': True, 'equation_sorting': False, 'automatic_tearing': False}
         #~ fmu = load_fmu(compile_fmu(class_name, file_paths, compiler_options=compiler_opts))
         #~ init_res = fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-10}})
-        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_opt_init.txt'))
+        init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_init.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_opt_init.txt'))
+        #~ init_res = LocalDAECollocationAlgResult(result_data=ResultDymolaTextual('fourbar1_sol_new.txt'))
         
         class_name_opt = "Fourbar1_Opt"
         op = transfer_optimization_problem(class_name_opt, file_paths, compiler_options=compiler_opts)
@@ -414,9 +437,10 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-3
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        opt_opts['IPOPT_options']['max_iter'] = 0
         opt_opts['result_file_name'] = "fourbar1_sol_new.txt"
-        opt_opts['order'] = "random"
-        opt_opts['write_scaled_result'] = True
+        #~ opt_opts['order'] = "random"
+        #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['mu_init'] = 1e-5
         
         opt_opts['n_e'] = 60
@@ -528,90 +552,98 @@ if __name__ == "__main__":
             Ro = 40;
             if with_plots:
                 # Plot road
+                lw = 1.6
                 plt.close(1)
                 plt.figure(1)
-                plt.plot(X, Y, 'b')
+                plt.plot(X, Y, 'b', lw=lw)
                 xi = np.linspace(0., Ri, 100)
                 xo = np.linspace(0., Ro, 100)
                 yi = (Ri**8 - xi**8) ** (1./8.)
                 yo = (Ro**8 - xo**8) ** (1./8.)
-                plt.plot(xi, yi, 'r--')
-                plt.plot(xo, yo, 'r--')
-                plt.xlabel('X [m]')
-                plt.ylabel('Y [m]')
+                plt.plot(xi, yi, 'r--', lw=lw)
+                plt.plot(xo, yo, 'r--', lw=lw)
+                #~ plt.xlabel('$X$ [m]')
+                #~ plt.ylabel('$Y$ [m]')
                 plt.legend(['position', 'road'], loc=3)
 
                 # Plot inputs
                 plt.close(2)
                 plt.figure(2)
-                plt.plot(time, delta * rad2deg, drawstyle='steps-post')
-                plt.plot(time, Twf * 1e-3, drawstyle='steps-post')
-                plt.plot(time, Twr * 1e-3, drawstyle='steps-post')
-                plt.xlabel('time [s]')
-                plt.legend(['delta [deg]', 'Twf [kN]', 'Twr [kN]'], loc=4)
+                plt.plot(time, delta * rad2deg, drawstyle='steps-post', lw=lw)
+                plt.plot(time, Twf * 1e-3, drawstyle='steps-post', lw=lw)
+                plt.plot(time, Twr * 1e-3, drawstyle='steps-post', lw=lw)
+                #~ plt.xlabel('$t$ [s]')
+                #~ plt.legend(['$\delta$ [deg]', '$\\tau_f^{\mathrm{ref}}$ [kN]', '$\\tau_r^{\\mathrm{ref}}$ [kN]'], loc=1)
+                plt.legend(['           ', '', ''], loc=4)
                 plt.show()
         elif problem == "double_pendulum":
-            #~ init_time = init_res['time']
-            #~ init_phi1 = init_res['pendulum.revolute1.phi']
-            #~ init_phi2 = init_res['pendulum.revolute2.phi']
-            #~ init_r1 = init_res['pendulum.boxBody1.r[1]'][0]
-            #~ init_r2 = init_res['pendulum.boxBody2.r[1]'][0]
-            #~ init_x1 = init_r1*cos(init_phi1)
-            #~ init_y1 = init_r1*sin(init_phi1)
-            #~ init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
-            #~ init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
-            #~ time = res['time']
-            #~ phi1 = res['pendulum.revolute1.phi']
-            #~ phi2 = res['pendulum.revolute2.phi']
-            #~ r1 = res['pendulum.boxBody1.r[1]'][0]
-            #~ r2 = res['pendulum.boxBody2.r[1]'][0]
-            #~ x1 = r1*cos(phi1)
-            #~ y1 = r1*sin(phi1)
-            #~ x2 = x1 + r2*cos(phi1 + phi2)
-            #~ y2 = y1 + r2*sin(phi1 + phi2)
-            #~ sim_fmu = load_fmu(compile_fmu("DoublePendulum.Sim", file_paths))
-            #~ sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
-                                       #~ input=res.get_opt_input())
-            #~ sim_time = sim_res['time']
-            #~ sim_phi1 = sim_res['pendulum.revolute1.phi']
-            #~ sim_phi2 = sim_res['pendulum.revolute2.phi']
-            #~ sim_r1 = sim_res['pendulum.boxBody1.r[1]'][0]
-            #~ sim_r2 = sim_res['pendulum.boxBody2.r[1]'][0]
-            #~ sim_x1 = sim_r1*cos(sim_phi1)
-            #~ sim_y1 = sim_r1*sin(sim_phi1)
-            #~ sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
-            #~ sim_y2 = sim_y1 + sim_r2*sin(sim_phi1 + sim_phi2)
+            init_time = init_res['time']
+            init_phi1 = init_res['pendulum.revolute1.phi']
+            init_phi2 = init_res['pendulum.revolute2.phi']
+            init_r1 = init_res['pendulum.boxBody1.r[1]'][0]
+            init_r2 = init_res['pendulum.boxBody2.r[1]'][0]
+            init_x1 = init_r1*cos(init_phi1)
+            init_y1 = init_r1*sin(init_phi1)
+            init_x2 = init_x1 + init_r2*cos(init_phi1 + init_phi2)
+            init_y2 = init_y1 + init_r2*sin(init_phi1 + init_phi2)
+            time = res['time']
+            phi1 = res['pendulum.revolute1.phi']
+            phi2 = res['pendulum.revolute2.phi']
+            r1 = res['pendulum.boxBody1.r[1]'][0]
+            r2 = res['pendulum.boxBody2.r[1]'][0]
+            x1 = r1*cos(phi1)
+            y1 = r1*sin(phi1)
+            x2 = x1 + r2*cos(phi1 + phi2)
+            y2 = y1 + r2*sin(phi1 + phi2)
+            sim_fmu = load_fmu(compile_fmu("DoublePendulum.Sim", file_paths))
+            sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
+                                       input=res.get_opt_input())
+            sim_time = sim_res['time']
+            sim_phi1 = sim_res['pendulum.revolute1.phi']
+            sim_phi2 = sim_res['pendulum.revolute2.phi']
+            sim_r1 = sim_res['pendulum.boxBody1.r[1]'][0]
+            sim_r2 = sim_res['pendulum.boxBody2.r[1]'][0]
+            sim_x1 = sim_r1*cos(sim_phi1)
+            sim_y1 = sim_r1*sin(sim_phi1)
+            sim_x2 = sim_x1 + sim_r2*cos(sim_phi1 + sim_phi2)
+            sim_y2 = sim_y1 + sim_r2*sin(sim_phi1 + sim_phi2)
 
-            #~ opt_trajs = np.vstack([time, res['u'], phi1, phi2]).T
+            opt_trajs = np.vstack([time, res['u'], phi1, phi2]).T
             #~ sio.savemat('double_pendulum_sol.mat', {'opt_trajs': opt_trajs})
             
             if with_plots:
+                lw = 1.6
                 plt.close(1)
-                plt.figure(1)
-                plt.plot(init_x1, init_y1, 'b:')
-                plt.plot(init_x2, init_y2, 'r:')
-                plt.plot(sim_x1, sim_y1, 'b--')
-                plt.plot(sim_x2, sim_y2, 'r--')
-                plt.plot(x1, y1, 'b')
-                plt.plot(x2, y2, 'r')
-                plt.legend(['Tip 1 init', 'Tip 2 init', 'Tip 1 sim', 'Tip 2 sim', 'Tip 1 opt', 'Tip 2 opt'])
+                fig = plt.figure(1)
+                #~ plt.plot(init_x1, init_y1, 'b:')
+                #~ plt.plot(init_x2, init_y2, 'r:')
+                #~ plt.plot(sim_x1, sim_y1, 'b--')
+                #~ plt.plot(sim_x2, sim_y2, 'r--')
+                sp1 = fig.add_subplot(2, 1, 1)
+                #~ sp1.plot(x1, y1, 'b')
+                #~ sp1.plot(x2, y2, 'r')
+                sp1.plot(time, phi1, 'b', lw=lw)
+                sp1.plot(time, phi2, 'r', lw=lw)
+                pi = np.pi
+                frame1 = plt.gca()
+                frame1.axes.xaxis.set_ticklabels([])
+                frame1.axes.yaxis.set_ticks([-pi/2, -pi/4, 0, pi/4, pi/2])
+                frame1.axes.yaxis.set_ticklabels(['$-$0.5$\pi$', '$-$0.25$\pi$', '0', '0.25$\pi$', '0.5$\pi$'])
+                #~ plt.legend(['Tip 1 init', 'Tip 2 init', 'Tip 1 sim', 'Tip 2 sim', 'Tip 1 opt', 'Tip 2 opt'])
+                sp1.legend(['           ', ''], loc=4)
+                sp1.grid()
 
-                plt.close(2)
-                plt.figure(2)
-                plt.plot(init_time, init_phi1, 'b:')
-                plt.plot(init_time, init_phi2, 'r:')
-                plt.plot(sim_time, sim_phi1, 'b--')
-                plt.plot(sim_time, sim_phi2, 'r--')
-                plt.plot(time, phi1, 'b')
-                plt.plot(time, phi2, 'r')
-                plt.legend(['$\phi_1$ init', '$\phi_2$ init', '$\phi_1$ sim', '$\phi_2$ sim',
-                            '$\phi_1$ opt', '$\phi_2$ opt'])
+                sp2 = fig.add_subplot(2, 1, 2)
+                sp2.plot(time, res['u'], lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.yaxis.set_ticks([-500, -250, 0, 250, 500])
+                frame1.axes.yaxis.set_ticklabels(['$-$500', '$-$250', '0', '250', '500'])
+                sp2.grid()
+                #~ sp2.legend(['    '], loc=4)
 
-                plt.close(3)
-                plt.figure(3)
-                plt.plot(init_time, init_res['u'], 'b:')
-                plt.plot(time, res['u'], 'b')
-                plt.legend(['$u$ init', '$u$ opt'])
+                xfac = 0.03
+                scale_axis(sp1, xfac=xfac)
+                scale_axis(sp2, xfac=xfac)
                 
                 plt.show()
         elif problem == "ccpp":
@@ -620,24 +652,39 @@ if __name__ == "__main__":
             init_sim_plant_load = res['u']
             init_sim_time = res['time']
             if with_plots:
+                lw = 1.6
                 plt.close(102)
-                plt.figure(102)
-                plt.subplot(3, 1, 1)
-                plt.plot(init_sim_time, init_sim_plant_p * 1e-6)
-                plt.ylabel('evaporator pressure [MPa]')
-                plt.grid(True)
-                plt.title('Optimal startup')
+                fig = plt.figure(102)
+                
+                sp1 = fig.add_subplot(3, 1, 1)
+                sp1.plot(init_sim_time, init_sim_plant_p * 1e-6, lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.xaxis.set_ticklabels([])
+                #~ plt.ylabel('evaporator pressure [MPa]')
+                sp1.grid(True)
+                #~ plt.title('Optimal startup')
 
-                plt.subplot(3, 1, 2)
-                plt.plot(init_sim_time, init_sim_plant_sigma * 1e-6)
-                plt.grid(True)
-                plt.ylabel('turbine thermal stress [MPa]')
+                sp2 = fig.add_subplot(3, 1, 2)
+                sp2.plot(init_sim_time, init_sim_plant_sigma * 1e-6, lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.xaxis.set_ticklabels([])
+                frame1.axes.yaxis.set_ticks([0, 75, 150, 225, 300])
+                sp2.grid(True)
+                #~ plt.ylabel('turbine thermal stress [MPa]')
 
-                plt.subplot(3, 1, 3)
-                plt.plot(init_sim_time, init_sim_plant_load)
-                plt.grid(True)
-                plt.ylabel('input load [1]')
-                plt.xlabel('time [s]')
+                sp3 = fig.add_subplot(3, 1, 3)
+                sp3.plot(init_sim_time, init_sim_plant_load, lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.yaxis.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+                sp3.grid(True)
+                #~ plt.ylabel('input load [1]')
+                #~ plt.xlabel('time [s]')
+
+                xfac=0.02
+                scale_axis(sp1, xfac=xfac)
+                scale_axis(sp2, xfac=xfac)
+                scale_axis(sp3, xfac=xfac)
+                
                 plt.show()
         elif problem == "hrsg" or problem == "hrsg_marcus":
             Tgasin=res['sys.gasSource.T']
@@ -646,38 +693,81 @@ if __name__ == "__main__":
             SHTRef=res['SHTRef']
             SHPRef=res['SHPRef']
             RHPRef=res['RHPRef']
+            xfac=0.02
+            lw=1.6
             if with_plots:
-                plt.figure(2)
-                plt.subplot(411)
-                plt.plot(res['time'],res['sys.SH2.T_water_out'],'r', label = 'SH2 T steam out [K]')
-                plt.plot(res['time'],res['sys.RH.T_water_out'], label = 'RH T steam out [K]')
-                plt.plot(res['time'],Tgasin,'g', label = 'T gas [K]')
-                plt.plot(res['time'],SHTRef,'r--', label = 'SH T reference [K]')
-                plt.ylabel('Temp. [K]')
-                plt.legend()
-                plt.grid()
-                plt.subplot(412)
-                plt.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r', label = 'SH2 p steam out [bar]')
-                plt.plot(res['time'],res['sys.RH.water_out.p']/1e5,  label = 'SH p steam out [bar]')
-                plt.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
-                plt.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
-                plt.ylabel('Pressure [bar]')
-                plt.legend()
-                plt.grid()
-                plt.subplot(413)
-                plt.plot(res['time'],uSHP, label = 'SH valve position')
-                plt.plot(res['time'],uRHP,'r', label = 'RH valve position')
-                plt.legend()
-                plt.grid()
-                plt.ylabel('Position')
-                plt.subplot(414)
-                plt.plot(res['time'],res['dT_SH2'], label = 'dT SH 2 [K]')
-                plt.plot(res['time'],res['dT_RH'],'g', label = 'dT RH 2 [K]')
-                plt.plot(res['time'],res['dTMax_SH2'],'b--', label = 'max dT SH 2 [K]')
-                plt.plot(res['time'],res['dTMax_RH'],'g--', label = 'max dT RH [K]')
-                plt.grid()
-                plt.ylabel('dT [K]')
-                plt.legend()
+                plt.close(2)
+                fig = plt.figure(2, figsize=(9, 11))
+                sp = fig.add_subplot(411)
+                #~ plt.plot(res['time'],res['sys.SH2.T_water_out'],'r', label = 'SH2 T steam out [K]')
+                #~ plt.plot(res['time'],res['sys.RH.T_water_out'], label = 'RH T steam out [K]')
+                #~ plt.plot(res['time'],Tgasin,'g', label = 'T gas [K]')
+                #~ plt.plot(res['time'],SHTRef,'r--', label = 'SH T reference [K]')
+                #~ plt.ylabel('Temp. [K]')
+                sp.plot(res['time'],res['sys.SH2.T_water_out'],'r',lw=lw)
+                sp.plot(res['time'],res['sys.RH.T_water_out'],'b',lw=lw)
+                sp.plot(res['time'],Tgasin,'g',lw=lw)
+                sp.plot(res['time'],SHTRef,'r--')
+                sp.set_ylabel('Temp. [K]')
+                frame = plt.gca()
+                frame.axes.xaxis.set_ticklabels([])
+                frame.axes.yaxis.set_label_coords(-0.1,0.5)
+                #~ frame.axes.yaxis.set_ticks([500, 600, 700, 800])
+                #~ sp.legend(['         ', '', ''],loc=2)
+                sp.grid()
+                scale_axis(sp, xfac=xfac)
+                
+                sp = fig.add_subplot(412)
+                #~ plt.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r', label = 'SH2 p steam out [bar]')
+                #~ plt.plot(res['time'],res['sys.RH.water_out.p']/1e5,  label = 'RH p steam out [bar]')
+                #~ plt.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
+                #~ plt.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
+                #~ plt.ylabel('Pressure [bar]')
+                sp.plot(res['time'],res['sys.SH2.water_out.p']/1e5,'r',lw=lw)
+                sp.plot(res['time'],res['sys.RH.water_out.p']/1e5,'b',lw=lw)
+                sp.plot(res['time'],SHPRef,'r--', label = 'SH2 p reference [bar]')
+                sp.plot(res['time'],RHPRef,'b--',  label = 'RH p reference [bar]')
+                sp.set_ylabel('Pressure [bar]')
+                frame = plt.gca()
+                frame.axes.xaxis.set_ticklabels([])
+                frame.axes.yaxis.set_ticks([0, 20, 40, 60, 80])
+                frame.axes.yaxis.set_label_coords(-0.1,0.5)
+                #~ sp.legend(['         ', ''],loc=2)
+                sp.grid()
+                scale_axis(sp, xfac=xfac)
+                
+                sp = fig.add_subplot(413)
+                #~ plt.plot(res['time'],uSHP, label = 'SH valve position')
+                #~ plt.plot(res['time'],uRHP,'r', label = 'RH valve position')
+                sp.plot(res['time'],uSHP, 'r',lw=lw)
+                sp.plot(res['time'],uRHP,'b',lw=lw)
+                sp.set_ylabel('Valve Pos. [1]')
+                frame = plt.gca()
+                frame.axes.xaxis.set_ticklabels([])
+                frame.axes.yaxis.set_ticks([0., 0.1, 0.2, 0.3, 0.4, 0.5])
+                frame.axes.yaxis.set_label_coords(-0.1,0.5)
+                #~ sp.legend()
+                sp.grid()
+                scale_axis(sp, xfac=xfac)
+                
+                sp = fig.add_subplot(414)
+                #~ sp.plot(res['time'],res['dT_SH2'], label = 'dT SH 2 [K]')
+                #~ sp.plot(res['time'],res['dT_RH'],'g', label = 'dT RH 2 [K]')
+                #~ sp.plot(res['time'],res['dTMax_SH2'],'b--', label = 'max dT SH 2 [K]')
+                #~ sp.plot(res['time'],res['dTMax_RH'],'g--', label = 'max dT RH [K]')
+                sp.plot(res['time'],res['dT_SH2'], 'r',lw=lw)
+                sp.plot(res['time'],res['dT_RH'],'b',lw=lw)
+                #~ sp.plot(res['time'],res['dTMax_SH2'],'r--')
+                #~ sp.plot(res['time'],res['dTMax_RH'],'b--')
+                sp.plot(res['time'],res['dTMax_SH2'],'--',color='purple')
+                sp.grid()
+                sp.set_ylabel('Temp. grad. [K]')
+                sp.set_xlabel('Time [s]')
+                frame = plt.gca()
+                frame.axes.yaxis.set_ticks([0, 5, 10, 15])
+                frame.axes.yaxis.set_label_coords(-0.1,0.5)
+                #~ sp.legend(['         ', ''],loc=1)
+                scale_axis(sp, xfac=xfac)
                 plt.show()
         elif problem == "dist4":
             # Extract results
@@ -699,87 +789,72 @@ if __name__ == "__main__":
 
             # Plot
             if with_plots:
-                plt.rcParams.update(
-                {'font.serif': ['Times New Roman'],
-                 'text.usetex': True,
-                 'font.family': 'serif',
-                 'axes.labelsize': 20,
-                 'legend.fontsize': 16,
-                 'xtick.labelsize': 12,
-                 'font.size': 20,
-                 'ytick.labelsize': 14})
-                pad = 2
-                padplus = plt.rcParams['axes.labelsize'] / 2
-
-                # Define function for custom axis scaling in plots
-                def scale_axis(figure=plt, xfac=0.01, yfac=0.05):
-                    """
-                    Adjust the axis.
-
-                    The size of the axis is first changed to plt.axis('tight') and then
-                    scaled by (1 + xfac) horizontally and (1 + yfac) vertically.
-                    """
-                    (xmin, xmax, ymin, ymax) = figure.axis('tight')
-                    if figure == plt:
-                        figure.xlim(xmin - xfac * (xmax - xmin), xmax + xfac * (xmax - xmin))
-                        figure.ylim(ymin - yfac * (ymax - ymin), ymax + yfac * (ymax - ymin))
-                    else:
-                        figure.set_xlim(xmin - xfac * (xmax - xmin), xmax + xfac * (xmax - xmin))
-                        figure.set_ylim(ymin - yfac * (ymax - ymin), ymax + yfac * (ymax - ymin))
+                #~ plt.rcParams.update(
+                #~ {'font.serif': ['Times New Roman'],
+                 #~ 'text.usetex': True,
+                 #~ 'font.family': 'serif',
+                 #~ 'axes.labelsize': 20,
+                 #~ 'legend.fontsize': 16,
+                 #~ 'xtick.labelsize': 12,
+                 #~ 'font.size': 20,
+                 #~ 'ytick.labelsize': 14})
+                #~ pad = 2
+                #~ padplus = plt.rcParams['axes.labelsize'] / 2
 
                 # Define function for plotting the important quantities
                 def plot_solution(t, T_28, T_14, Q, L_vol, fig_index, title):
                     plt.close(fig_index)
-                    fig = plt.figure(fig_index)
+                    fig = plt.figure(fig_index, figsize=(12, 9))
                     fig.subplots_adjust(wspace=0.35)
 
                     ax = fig.add_subplot(2, 2, 1)
                     bx = fig.add_subplot(2, 2, 2)
+                    frame = plt.gca()
+                    frame.axes.yaxis.set_ticks([93, 94, 95])
                     cx = fig.add_subplot(2, 2, 3, sharex=ax)
                     dx = fig.add_subplot(2, 2, 4, sharex=bx)
-                    width = 3
+                    width = 1.6
 
                     ax.plot(t, T_28 + abs_zero, lw=width)
                     ax.hold(True)
-                    ax.plot(t[[0, -1]], 2 * [T_28_ref + abs_zero], 'g--')
+                    ax.plot(t[[0, -1]], 2 * [T_28_ref + abs_zero], 'b--')
                     ax.hold(False)
                     ax.grid()
-                    ax.set_ylabel('$T_{28}$ [$^\circ$C]', labelpad=pad)
+                    #~ ax.set_ylabel('$T_{28}$ [$^\circ$C]', labelpad=pad)
                     plt.setp(ax.get_xticklabels(), visible=False)
                     scale_axis(ax)
 
                     bx.plot(t, T_14 + abs_zero, lw=width)
                     bx.hold(True)
-                    bx.plot(t[[0, -1]], 2 * [T_14_ref + abs_zero], 'g--')
+                    bx.plot(t[[0, -1]], 2 * [T_14_ref + abs_zero], 'b--')
                     bx.hold(False)
                     bx.grid()
-                    bx.set_ylabel('$T_{14}$ [$^\circ$C]', labelpad=pad)
+                    #~ bx.set_ylabel('$T_{14}$ [$^\circ$C]', labelpad=pad)
                     plt.setp(bx.get_xticklabels(), visible=False)
                     scale_axis(bx)
 
                     cx.plot(t, Q * Q_fac, lw=width)
                     cx.hold(True)
-                    cx.plot(t[[0, -1]], 2 * [Q_ref * Q_fac], 'g--')
+                    cx.plot(t[[0, -1]], 2 * [Q_ref * Q_fac], 'b--')
                     cx.hold(False)
                     cx.grid()
-                    cx.set_ylabel('$Q$ [kW]', labelpad=pad)
-                    cx.set_xlabel('$t$ [s]')
+                    #~ cx.set_ylabel('$Q$ [kW]', labelpad=pad)
+                    #~ cx.set_xlabel('$t$ [s]')
                     scale_axis(cx)
 
                     dx.plot(t, L_vol * L_fac, lw=width)
                     dx.hold(True)
-                    dx.plot(t[[0, -1]], 2 * [L_vol_ref * L_fac], 'g--')
+                    dx.plot(t[[0, -1]], 2 * [L_vol_ref * L_fac], 'b--')
                     dx.hold(False)
                     dx.grid()
-                    dx.set_ylabel('$L_{\Large \mbox{vol}}$ [l/h]', labelpad=pad)
-                    dx.set_xlabel('$t$ [s]')
+                    #~ dx.set_ylabel('$L_{\Large \mbox{vol}}$ [l/h]', labelpad=pad)
+                    #~ dx.set_xlabel('$t$ [s]')
                     scale_axis(dx)
 
-                    fig.suptitle(title)
+                    #~ fig.suptitle(title)
                     plt.show()
 
-                plot_solution(opt_t, opt_T_28, opt_T_14, opt_Q, opt_L_vol, 5,
-                              'Optimal control')
+                plot_solution(opt_t, opt_T_28, opt_T_14, opt_Q, opt_L_vol, 5, 'Optimal control')
         elif problem == "fourbar1":
             #~ sim_fmu = load_fmu(compile_fmu("Fourbar1.Fourbar1Sim", file_paths, compiler_options=compiler_opts))
             #~ sim_res = sim_fmu.simulate(final_time=time_horizon, options={'CVode_options': {'rtol': 1e-12}},
@@ -799,29 +874,50 @@ if __name__ == "__main__":
             s = res['fourbar1.j2.s']
             phi = res['fourbar1.j1.phi']
             u = res['u']
+
+            opt_trajs = np.vstack([time, u, phi]).T
+            sio.savemat('fourbar_sol.mat', {'opt_trajs': opt_trajs})
             if with_plots:
-                 plt.close(1)
-                 plt.figure(1)
-                 plt.subplot(3, 1, 1)
-                 plt.plot(time, s)
-                 plt.plot(sim_time, sim_s)
-                 plt.plot(init_time, init_s)
-                 plt.xlabel('$t$')
-                 plt.ylabel('$s$')
-                 plt.subplot(3, 1, 2)
-                 plt.plot(time, phi)
-                 plt.plot(sim_time, sim_phi)
-                 plt.plot(init_time, init_phi)
-                 plt.xlabel('$t$')
-                 plt.ylabel('$\phi$')
-                 plt.subplot(3, 1, 3)
-                 plt.plot(time, u)
-                 plt.plot(sim_time, sim_u)
-                 plt.plot(init_time, init_u)
-                 plt.xlabel('$t$')
-                 plt.ylabel('$u$')
-                 plt.legend(['Opt', 'Sim', 'Init'], loc=1)
-                 plt.show()
+                plt.close(1)
+                fig = plt.figure(1)
+                sp1 = fig.add_subplot(3, 1, 1)
+                lw = 1.6
+                sp1.plot(time, s, lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.xaxis.set_ticklabels([])
+                frame1.axes.yaxis.set_ticks([-0.44, -0.41, -0.38, -0.35])
+                sp1.grid()
+                #~ plt.plot(sim_time, sim_s)
+                #~ plt.plot(init_time, init_s)
+                #~ plt.xlabel('$t$')
+                #~ plt.ylabel('$s$')
+                sp2 = fig.add_subplot(3, 1, 2)
+                sp2.plot(time, phi, lw=lw)
+                frame1 = plt.gca()
+                frame1.axes.xaxis.set_ticklabels([])
+                frame1.axes.yaxis.set_ticks([1.8, 2.2, 2.6, 3.0])
+                sp2.grid()
+                #~ plt.plot(sim_time, sim_phi)
+                #~ plt.plot(init_time, init_phi)
+                #~ plt.xlabel('$t$')
+                #~ plt.ylabel('$\phi$')
+                sp3 = fig.add_subplot(3, 1, 3)
+                sp3.plot(time, u, lw=lw)
+                sp3.grid()
+                frame1 = plt.gca()
+                #~ frame1.axes.xaxis.set_ticklabels([])
+                frame1.axes.yaxis.set_ticks([-90, -45, 0, 45, 90])
+                #~ plt.plot(sim_time, sim_u)
+                #~ plt.plot(init_time, init_u)
+                #~ plt.xlabel('$t$')
+                #~ plt.ylabel('$u$')
+                #~ plt.legend(['Opt', 'Sim', 'Init'], loc=1)
+
+                xfac=0.03
+                scale_axis(sp1, xfac=xfac)
+                scale_axis(sp2, xfac=xfac)
+                scale_axis(sp3, xfac=xfac)
+                plt.show()
         else:
             raise ValueError("Unknown problem %s." % problem)
                

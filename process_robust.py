@@ -3,7 +3,9 @@ from IPython.core.debugger import Tracer; dh = Tracer()
 from scipy.stats import norm
 import numpy as np
 
-stats = pickle.load(open('stats_dist4_20', "rb"))
+stats = pickle.load(open('stats_dist4_30_global', "rb"))
+#~ stats = pickle.load(open('stats_dist4_30_1472377183', "rb"))
+#~ stats = pickle.load(open('stats_dist4_20_no_tearing', "rb"))
 
 def comparator(s1, s2):
     s1_split = s1.split('.')
@@ -153,7 +155,7 @@ On %.1f\%% of the instances, all schemes successfully solved the problem.
 On %.1f\%% of the instances, all schemes failed.}
 {\\begin{tabular}[l]{@{}ccccc}
 \\toprule
-\textsc{Scheme} & Success & Time & $\sigma_t$ & Iter \\\\
+\\textsc{Scheme} & Success & Time & $\sigma_t$ & Iter \\\\
 \\midrule
 """ % (n_runs, problem, 100*tot_full_success/n_runs, 100*invalid_runs/n_runs)
     for tbl_schm in table_schemes:

@@ -21,9 +21,9 @@ if __name__ == "__main__":
     #~ problems = ["vehicle"]
     #~ problems = ["ccpp"]
     #~ problems = ["fourbar1"]
-    problems = ["dist4"]
+    #~ problems = ["dist4"]
     #~ problems = ["double_pendulum"]
-    #~ problems = ["hrsg_marcus"]
+    problems = ["hrsg_marcus"]
     schemes = {}
     #~ schemes["vehicle"] = ["0", "1", "2.05"]
     #~ schemes["vehicle"] = ["0"]
@@ -34,12 +34,13 @@ if __name__ == "__main__":
                            #~ "4.05", "4.10", "4.20", "4.30", "4.40"]
     #~ schemes['fourbar1'] = ["1", "3", "4.20"]
     #~ schemes['fourbar1'] = ["3"]
-    schemes['dist4'] = ["1", "2.05", "2.10", "2.20", "2.30", "2.40",
-                        "3", "4.05", "4.10", "4.20", "4.30", "4.40"]
-    #~ schemes['dist4'] = ["0"]
+    #~ schemes['dist4'] = ["0", "1"]
+    #~ schemes['dist4'] = ["1", "2.05", "2.20"]
+    #~ schemes['dist4'] = ["0", "1", "2.05"]
     #~ schemes['dist4'] = ["0", "1", "2.05", "2.10", "2.20", "2.30", "2.40"]
-    #~ schemes['dist4'] = ["3", "4.05", "4.10", "4.20", "4.30", "4.40"]
-                        
+    #~ schemes['dist4'] = ["1", "2.05", "2.10", "2.20", "2.30", "2.40"]
+    #~ schemes['dist4'] = ["attribute", "linear", "affine", "time-variant"]
+    schemes['hrsg_marcus'] = ["attribute", "linear", "affine", "time-variant"]
     #~ schemes['double_pendulum'] = ["0", "1", "2.05", "3", "4.05", "4.10"]
     #~ schemes['double_pendulum'] = ["0", "1", "3"]
     #~ schemes['hrsg'] = ["0", "1", "3", "4.02", "4.04"]
@@ -78,7 +79,7 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma97_u'] = 1e-4
         opt_opts['IPOPT_options']['ma97_umax'] = 1e-2
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
-        opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
+        #~ opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
         if problem == "vehicle":
             std_dev[problem] = 0.1
             caus_opts = sp.CausalizationOptions()
@@ -376,14 +377,12 @@ if __name__ == "__main__":
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
                 n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
         elif problem == "dist4":
-            std_dev[problem] = 0.3
+            std_dev[problem] = 0.2
             #~ std_dev[problem] = 1e-15
             caus_opts = sp.CausalizationOptions()
             caus_opts['uneliminable'] = ['Dist', 'Bott']
-            caus_opts['tear_vars'] = (['Temp[%d]' % i for i in range(1, 43)] + 
-                                      ['V[%d]' % i for i in range(2, 42)] + ['L[41]'] +
-                                      ['der(xA[%d])' % i for i in range(2, 43)])
-            caus_opts['tear_res'] = range(1083, 1125) + range(1042, 1083) + range(673, 714)
+            #~ caus_opts['uneliminable'] += (['ent_term_A[%d]' % i for i in range(1, 43)] +
+                                          #~ ['ent_term_B[%d]' % i for i in range(1, 43)])
             class_name = "JMExamples_opt.Distillation4_Opt"
             file_paths = (os.path.join(get_files_path(), "JMExamples.mo"),
                           os.path.join(get_files_path(), "JMExamples_opt.mop"))
@@ -397,161 +396,46 @@ if __name__ == "__main__":
             #~ opt_opts['IPOPT_options']['mu_strategy'] = "monotone"
             #~ opt_opts['IPOPT_options']['mu_init'] = 1e-3
 
-            # Local
-            #~ opt_opts['n_e'] = 20
-            #~ opt_opts['IPOPT_options']['max_cpu_time'] = 40
-
-            # Global
-            opt_opts['n_e'] = 1
-            opt_opts['n_cp'] = 25
+            #~ # Local
+            opt_opts['n_e'] = 20
             opt_opts['IPOPT_options']['max_cpu_time'] = 40
+
+            #~ # Global
+            #~ opt_opts['n_e'] = 1
+            #~ opt_opts['n_cp'] = 15
+            #~ opt_opts['IPOPT_options']['max_cpu_time'] = 60
             
             compiler_opts = {'generate_html_diagnostics': True, 'state_initial_equations': True}
 
             # Set up optimization problems for each scheme
-            ops[problem] = {}
+            op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
+            caus_opts['dense_tol'] = 30
+            op = sp.BLTOptimizationProblem(op, caus_opts)
             solvers[problem] = {}
-            n_algs[problem] = {}
             
-            # Scheme 0
-            scheme = "0"
+            # Attribute
+            scheme = "attribute"
             if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                ops[problem][scheme] = op
+                opt_opts['nominal_traj_mode'] = {'_default_mode': 'attribute'}
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 1
-            scheme = "1"
+            
+            # Linear
+            scheme = "linear"
             if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = np.inf
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
+                opt_opts['nominal_traj_mode'] = {'_default_mode': 'linear'}
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 2.05
-            scheme = "2.05"
+            
+            # Affine
+            scheme = "affine"
             if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 5
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
+                opt_opts['nominal_traj_mode'] = {'_default_mode': 'affine'}
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 2.10
-            scheme = "2.10"
+            
+            # Time-variant
+            scheme = "time-variant"
             if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 10
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
+                opt_opts['nominal_traj_mode'] = {'_default_mode': 'time-variant'}
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 2.20
-            scheme = "2.20"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 20
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 2.30
-            scheme = "2.30"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 30
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 2.40
-            scheme = "2.40"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 40
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 3
-            scheme = "3"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = np.inf
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 4.05
-            scheme = "4.05"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 5
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 4.10
-            scheme = "4.10"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 10
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 4.20
-            scheme = "4.20"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 20
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 4.30
-            scheme = "4.30"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 30
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 4.40
-            scheme = "4.40"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 40
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
         elif problem == "double_pendulum":
             std_dev[problem] = 0.3
             caus_opts = sp.CausalizationOptions()
@@ -669,94 +553,30 @@ if __name__ == "__main__":
                                        separate_process=True, compiler_options=compiler_opts))
 
             # Set up optimization problems for each scheme
-            ops[problem] = {}
+            op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
+            caus_opts['dense_tol'] = 30
+            caus_opts['tearing'] = True
+            op = sp.BLTOptimizationProblem(op, caus_opts)
             solvers[problem] = {}
-            n_algs[problem] = {}
-
-            # Scheme 0
-            scheme = "0"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 1
-            scheme = "1"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = np.inf
-                caus_opts['tearing'] = False
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-
-            # Scheme 3
-            scheme = "3"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = np.inf
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
+            opt_opts['nominal_traj_mode'] = {'cost': "linear"}
             
-            # Scheme 4.05
-            scheme = "4.05"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 5
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
+            # Set up solvers
+            for scheme in schemes[problem]:
+                opt_opts['nominal_traj_mode']['_default_mode'] = scheme
                 solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-            
-            # Scheme 4.10
-            scheme = "4.10"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 10
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
-            
-            # Scheme 4.20
-            scheme = "4.20"
-            if scheme in schemes[problem]:
-                op = transfer_optimization_problem(class_name, file_paths, compiler_options=compiler_opts)
-                caus_opts['dense_tol'] = 20
-                caus_opts['tearing'] = True
-                op = sp.BLTOptimizationProblem(op, caus_opts)
-                ops[problem][scheme] = op
-                solvers[problem][scheme] = op.prepare_optimization(options=opt_opts)
-                n_algs[problem][scheme] = len([var for var in op.getVariables(op.REAL_ALGEBRAIC) if not var.isAlias()])
         else:
             raise ValueError("Unknown problem %s." % problem)
-
-        # Print algebraics
-        print("Algebraic variables:")
-        for scheme in sorted(n_algs[problem].keys()):
-            print('%s: %d' % (scheme, n_algs[problem][scheme]))
-        print("\n")
 
         # Perturb initial state
         np.random.seed(1)
         
-        n_runs = 1000
+        n_runs = 10
         
-        op0 = ops[problem].values()[0] # Get arbitrary OP to compute min and max
+        op0 = op # Get arbitrary OP to compute min and max
         x_vars = op0.getVariables(op.DIFFERENTIATED)
         x_names = [x_var.getName() for x_var in x_vars]
         x0 = [init_res.initial(var.getName()) for var in x_vars]
         [x_min, x_max] = zip(*[(op0.get_attr(var, "min"), op0.get_attr(var, "max")) for var in x_vars])
-        if problem == "dist4":
-            x_min = tuple(42*[0.])
-            x_max = tuple(42*[1.])
         x0_pert_min = []
         x0_pert_max = []
 
