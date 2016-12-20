@@ -216,7 +216,7 @@ def find_deps(expr, mx_vars, deps=None):
         deps = len(mx_vars) * [False]
     for i in xrange(expr.getNdeps()):
         dep = expr.getDep(i)
-        deps = map(any, zip(deps, [dep.isEqual(var) for var in mx_vars]))
+        deps = map(any, zip(deps, [casadi.isEqual(dep, var) for var in mx_vars]))
         deps = find_deps(dep, mx_vars, deps)
     return deps
 
@@ -317,19 +317,20 @@ class Component(object):
         """
         # Check if block is linear
         res_f = casadi.MXFunction(self.mx_vars, self.eq_expr)
+        res_f_2 = casadi.MXFunction([casadi.vertcat(self.mx_vars)], [casadi.vertcat(self.eq_expr)])
+        res_f_2.init()
         res_f.setOption("name", "block_residual_for_solvability")
         res_f.init()
         is_linear = True
-        # Can probably create a SISO function and not nest loops in latest CasADi
         for i in xrange(self.n):
             for j in xrange(self.n):
                 # Check if jac[i, j] depends on block unknowns
-                if casadi.dependsOn(res_f.jac(i, j), self.mx_vars):
+                if casadi.dependsOn(res_f.jac(i, j), casadi.vertcat(self.mx_vars)):
                     is_linear = False
                     found_edges = 0
                     for edge in edges:
-                        if (self.eq_expr[j].isEqual(edge.eq.expression) and
-                            self.mx_vars[i].isEqual(edge.var.mx_var)):
+                        if (casadi.isEqual(self.eq_expr[j], edge.eq.expression) and
+                            casadi.isEqual(self.mx_vars[i], edge.var.mx_var)):
                             edge.linear = False
                             found_edges += 1
                     if found_edges != 1:
@@ -535,7 +536,7 @@ class Component(object):
 
         # Create new bipartite graph for block
         causal_edges = create_edges(causal_equations, causal_variables)
-        causal_graph = BipartiteGraph(causal_equations, causal_variables, causal_edges, [], [], CausalizationOptions())
+        causal_graph = BipartiteGraph(causal_equations, causal_variables, causal_edges, [], [], EliminationOptions())
 
         # Compute components and verify scalarity
         try:
@@ -1011,15 +1012,15 @@ class BLTModel(object):
         model --
             CasADi Interface Model.
 
-        options --
-            CausalizationOptions object.
+        elimination_options --
+            EliminationOptions object.
     """
 
-    def __init__(self, model, causalization_options=CausalizationOptions()):
+    def __init__(self, model, elimination_options=EliminationOptions()):
         """
         Creates a BLTModel from a Model.
         """
-        self.options = causalization_options
+        self.options = elimination_options
         self.tear_vars = list(self.options['tear_vars'])
         self.tear_res = list(self.options['tear_res'])
         
@@ -1547,7 +1548,7 @@ class BLTModel(object):
         for i in xrange(co.n):
             for vk in ['dx', 'x', 'u', 'w']:
                 for dae_var in self._mx_var_struct[vk]:
-                    if casadi.dependsOn(co.eq_expr[i], [dae_var]) and dae_var.getName() != var.name:
+                    if casadi.dependsOn(co.eq_expr[i], dae_var) and dae_var.getName() != var.name:
                         deps.append(dae_var)
         deps = list(set(deps))
 
@@ -1578,7 +1579,7 @@ class BLTModel(object):
                     inc_torn_dep_names = []
                     for dep in deps:
                         # If dependency causes fill-in
-                        if not casadi.dependsOn(self._graph.equations[inc].expression, [dep]):
+                        if not casadi.dependsOn(self._graph.equations[inc].expression, dep):
                             inc_torn_dep_names += self._dependencies[dep.getName()]
                     n_dependencies = len(set(inc_torn_dep_names))
                     measure += n_dependencies - 1
@@ -1673,7 +1674,7 @@ class BLTModel(object):
                     else:
                         raise RuntimeError("BUG: Unable to evaluate " +
                                            "value of %s." % var.getName())
-            return val.getValue()
+            return float(val)
         elif attr == "comment":
             var_desc = var.getAttribute("comment")
             if var_desc is None:

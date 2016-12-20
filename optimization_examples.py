@@ -35,22 +35,22 @@ if __name__ == "__main__":
     # Define problem
     #~ plt.rcParams.update({'text.usetex': False})
     problem = ["simple", "triangular", "circuit", "vehicle", "double_pendulum", "ccpp", "hrsg", "hrsg_marcus",
-               "dist4", "fourbar1"][-3]
+               "dist4", "fourbar1"][5]
     source = ["Modelica", "strings"][0]
     with_plots = True
     #~ with_plots = False
     with_opt = True
-    with_opt = False
+    #~ with_opt = False
     blt = True
     #~ blt = False
     jm_blt = True
     jm_blt = False
-    caus_opts = sp.CausalizationOptions()
+    caus_opts = sp.EliminationOptions()
     #~ caus_opts['plots'] = True
-    caus_opts['draw_blt'] = True
+    #~ caus_opts['draw_blt'] = True
     caus_opts['blt_strings'] = False
     caus_opts['solve_blocks'] = False
-    caus_opts['dense_tol'] = 30
+    caus_opts['dense_tol'] = 15
     #~ caus_opts['dense_tol'] = np.inf
     #~ caus_opts['dense_measure'] = "Markowitz"
     caus_opts['tearing'] = True
@@ -76,8 +76,8 @@ if __name__ == "__main__":
             opt_opts = op.optimize_options()
             opt_opts['IPOPT_options']['linear_solver'] = "ma57"
             #~ opt_opts['order'] = "random"
-            opt_opts['n_e'] = 1
-            opt_opts['n_cp'] = 2
+            opt_opts['n_e'] = 50
+            #~ opt_opts['n_cp'] = 2
             opt_opts['named_vars'] = True
             #~ np.random.seed(1)
             #~ opt_opts['write_scaled_result'] = True
@@ -134,16 +134,20 @@ if __name__ == "__main__":
         opt_opts = op.optimize_options()
         opt_opts['IPOPT_options']['linear_solver'] = "ma57"
         opt_opts['IPOPT_options']['tol'] = 1e-9
+        #~ opt_opts['IPOPT_options']['derivative_test'] = "only-second-order"
+        #~ opt_opts['IPOPT_options']['hessian_approximation'] = "limited-memory"
         #~ opt_opts['order'] = "reverse"
         #~ opt_opts['order'] = "random"
         #~ np.random.seed(5)
         #~ opt_opts['write_scaled_result'] = True
         #~ opt_opts['IPOPT_options']['print_kkt_blocks_to_mfile'] = -1
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-4
-        #~ opt_opts['IPOPT_options']['max_iter'] = 0
+        #~ opt_opts['IPOPT_options']['max_iter'] = 2
         opt_opts['n_e'] = 60
+        #~ opt_opts['n_e'] = 12
         #~ opt_opts['n_e'] = 100
         #~ opt_opts['n_cp'] = 1
+        opt_opts['named_vars'] = True
 
         # Set blocking factors
         factors = {'delta_u': opt_opts['n_e'] / 2 * [2],
@@ -437,7 +441,7 @@ if __name__ == "__main__":
         opt_opts['IPOPT_options']['ma57_pivtol'] = 1e-3
         opt_opts['IPOPT_options']['ma57_automatic_scaling'] = "yes"
         opt_opts['IPOPT_options']['mu_strategy'] = "adaptive"
-        opt_opts['IPOPT_options']['max_iter'] = 0
+        #~ opt_opts['IPOPT_options']['max_iter'] = 0
         opt_opts['result_file_name'] = "fourbar1_sol_new.txt"
         #~ opt_opts['order'] = "random"
         #~ opt_opts['write_scaled_result'] = True
@@ -923,6 +927,13 @@ if __name__ == "__main__":
                
 
         solver = res.solver
+        
+        #~ hessLag = solver.solver_object.hessLag()
+        #~ hessLag.init()
+        #~ hessLag.setInput(solver.xx_init, 0)
+        #~ hessLag.setInput(solver._par_vals, 1)
+        #~ hessLag.evaluate()
+        #~ hessVal = hessLag.getOutput(0)
 
         #~ c = casadi.MXFunction([solver.xx, solver.pp], [solver.constraints])
         #~ c.init()

@@ -10,7 +10,7 @@ import itertools
 import time as timing
 
 def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []), ncp=500, blt=True,
-             causalization_options=sp.CausalizationOptions(), expand_to_sx=True, suppress_alg=False,
+             elimination_options=sp.EliminationOptions(), expand_to_sx=True, suppress_alg=False,
              tol=1e-8, solver="IDA"):
     """
     Simulate model from CasADi Interface using CasADi.
@@ -19,13 +19,13 @@ def simulate(model, init_cond, start_time=0., final_time=1., input=(lambda t: []
     """
     if blt:
         t_0 = timing.time()
-        blt_model = sp.BLTModel(model, causalization_options)
+        blt_model = sp.BLTModel(model, elimination_options)
         blt_time = timing.time() - t_0
         print("BLT analysis time: %.3f s" % blt_time)
         blt_model._model = model
         model = blt_model
     
-    if causalization_options['closed_form']:
+    if elimination_options['closed_form']:
         solved_vars = model._solved_vars
         solved_expr = model._solved_expr
         #~ for (var, expr) in itertools.izip(solved_vars, solved_expr):
